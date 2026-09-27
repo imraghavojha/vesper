@@ -26,20 +26,26 @@ const time = (value: string) =>
 // Declined, free and all-day events never conflict.
 function agenda(events: AgendaEvent[]) {
   const now = new Date();
+  // Sorted by start, an event can only overlap later events that begin before it ends.
+  const timed = events
+    .filter((event) => event.busy && !event.allDay)
+    .sort((a, b) => a.start.localeCompare(b.start));
+  const conflicts = new Set<AgendaEvent>();
+  timed.forEach((event, index) => {
+    for (
+      let next = index + 1;
+      next < timed.length && timed[next]!.start < event.end;
+      next++
+    )
+      if (
+        timed[next]!.icalUid === null ||
+        timed[next]!.icalUid !== event.icalUid
+      )
+        conflicts.add(event).add(timed[next]!);
+  });
   const marked = events.map((event) => ({
     ...event,
-    conflict:
-      event.busy &&
-      !event.allDay &&
-      events.some(
-        (other) =>
-          other !== event &&
-          other.busy &&
-          !other.allDay &&
-          (other.icalUid === null || other.icalUid !== event.icalUid) &&
-          other.start < event.end &&
-          event.start < other.end,
-      ),
+    conflict: conflicts.has(event),
   }));
   return Array.from({ length: 7 }, (_, offset) => {
     const date = (days: number) =>
