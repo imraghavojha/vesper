@@ -15,6 +15,8 @@ import { createTRPCClient, httpLink, TRPCClientError } from "@trpc/client";
 import type { AppRouter } from "../server/router.js";
 import { normalizeHost, type Connection } from "../shared/connection.js";
 import "./style.css";
+import type { Draft } from "../shared/sync.js";
+import { ConversationScreen } from "./chat.js";
 
 const STORAGE_KEY = "vesper.connection.v1";
 type SavedConnection = Connection & {
@@ -29,6 +31,15 @@ type LocalHostStatus = {
 declare global {
   interface Window {
     vesperDesktop?: {
+      loadDraft(
+        workspaceId: string,
+        conversationId: string,
+      ): Promise<Draft | null>;
+      saveDraft(
+        workspaceId: string,
+        conversationId: string,
+        draft: Draft | null,
+      ): Promise<void>;
       loadConnection(): Promise<
         SavedConnection | null | { error: "restore-local-workspace" }
       >;
@@ -125,6 +136,7 @@ function App() {
   const [connection, setConnection] = useState<SavedConnection | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [remoteSetup, setRemoteSetup] = useState(false);
+  const [view, setView] = useState<"chat" | "workspace">("chat");
   const [localStatus, setLocalStatus] = useState<LocalHostStatus>({
     state: "stopped",
   });
@@ -191,16 +203,23 @@ function App() {
   }, []);
   return (
     <>
-      <header>
-        <Brand />
-        <span className="header-note">Your personal workspace</span>
-      </header>
+      {(!connection || view === "workspace") && (
+        <header>
+          <Brand />
+          {connection ? (
+            <button onClick={() => setView("chat")}>Back to chat</button>
+          ) : (
+            <span className="header-note">Your personal workspace</span>
+          )}
+        </header>
+      )}
       {storageError && (
         <p role="alert" className="banner">
           {storageError}
         </p>
       )}
       {localStatus.state === "failed" &&
+        (!connection || view === "workspace") &&
         (connection?.mode === "local" || !connection) && (
           <p className="banner" role="alert">
             {localStatus.message ?? "The local workspace could not start."}
@@ -210,6 +229,14 @@ function App() {
         <main className="workspace">
           <p role="status">Opening your saved connection…</p>
         </main>
+      ) : connection && view === "chat" ? (
+        <ConversationScreen
+          key={connection.workspaceId}
+          connection={connection}
+          onWorkspace={() => setView("workspace")}
+          onRevoked={forgetRevoked}
+          onDisconnect={() => save(null)}
+        />
       ) : connection ? (
         <Workspace
           connection={connection}
@@ -226,9 +253,11 @@ function App() {
           }
         />
       )}
-      <footer>
-        Vesper · Workspace preview <span>One shared host. Your devices.</span>
-      </footer>
+      {(!connection || view === "workspace") && (
+        <footer>
+          Vesper · Workspace preview <span>One shared host. Your devices.</span>
+        </footer>
+      )}
     </>
   );
 }
@@ -302,9 +331,9 @@ function Welcome({
         </p>
       )}
       <p className="scope-note">
-        This release sets up your workspace and devices. Chats, voice, agents,
-        account connections and Android are still being built. This setup screen
-        is temporary.
+        This release saves conversations and sets up your workspace and devices.
+        Agent replies, voice, account connections and Android are still being
+        built. This setup screen is temporary.
       </p>
     </main>
   );
@@ -452,7 +481,8 @@ function Pair({
       </section>
       <p className="scope-note">
         This first release connects devices and preserves workspace identity.
-        Chats, agents, connectors, and scheduled work are not available yet.
+        Saved conversations are available. Agent replies, connectors, and
+        scheduled work are not available yet.
       </p>
     </main>
   );
@@ -496,6 +526,10 @@ function Workspace({
   } | null>(null);
   const [clock, setClock] = useState(Date.now());
   const data = status.data;
+  useEffect(() => {
+    if (data?.settings?.appearance)
+      document.documentElement.dataset.appearance = data.settings.appearance;
+  }, [data?.settings?.appearance]);
   const mismatch =
     !!data &&
     !!connection.workspaceId &&
@@ -682,7 +716,12 @@ function Workspace({
           <h2>Available here</h2>
           <ul className="capabilities">
             <li>
-              <span className="check">✓</span> Shared workspace identity
+              <span className="check">✓</span> Saved conversations and private
+              drafts
+            </li>
+            <li>
+              <span className="check">✓</span> Shared appearance and workspace
+              identity
             </li>
             <li>
               <span className="check">✓</span> Persistent device connections
@@ -692,8 +731,9 @@ function Workspace({
             </li>
           </ul>
           <p className="muted">
-            Chat, agents, account connections and schedules are being built. No
-            background model work runs in this preview.
+            Your conversations and messages are saved. Agent replies, account
+            connections and schedules are being built. No background model work
+            runs in this preview.
           </p>
           <div className="small-note">
             {connection.mode === "local"
