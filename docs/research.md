@@ -2,20 +2,20 @@
 
 Research date: September 26–27, 2026. Recommendations are design judgments; links establish the underlying capabilities. Nothing here claims the application has been built or its backend tested.
 
-Read [architecture and concrete reuse](architecture-and-reuse.md) for the deeper source-level assessment, including T3's Effect prerelease dependency, browser settings that must change, specific reusable packages, and a tested Croner experiment. That document refines this initial shortlist.
+The authoritative decision is [final-architecture.md](final-architecture.md), including independent hosting and a cross-device shared vault. Read [architecture and concrete reuse](architecture-and-reuse.md) for the deeper source-level assessment, including T3's Effect prerelease dependency, browser settings that must change, specific reusable packages, and a tested Croner experiment. That document refines this initial shortlist.
 
-## Recommended stack
+## Stack research, with final decisions in the architecture document
 
 | Area | Choice | Reason and boundary |
 | --- | --- | --- |
 | Mac | Electron, React, TypeScript, Vite | Chromium-backed embedded browser and native desktop integration outweigh the larger runtime for this project. |
 | Android | React Native, Expo development builds, Kotlin modules | Shares state/contracts with React while preserving native gestures, assistant service, alarms, and permissions. Expo Go alone is insufficient. |
 | Shared UI foundations | Design tokens, icons, state selectors, accessibility semantics; web/native components where necessary | Avoid promising one DOM implementation can produce native assistant and browser behavior. |
-| Host | Node.js 24 LTS, TypeScript, Effect for scoped services and typed errors | Closely follows the inspected T3 architecture. Keep the domain smaller than T3; do not transplant its whole server. Pin exact compatible versions in the bootstrap issue. |
+| Host | Pinned Node LTS and TypeScript in an independent backend | Reuse T3 behavior and selected helpers without requiring its whole Effect architecture. Pin compatible versions in bootstrap. |
 | Persistence | SQLite WAL, migrations, transactional commands, append-only run/approval audit | Simple for one host. A durable jobs table and outbox can meet initial requirements without operating a cluster. |
 | Transport | Typed request/event protocol with reconnect cursors | Shared contracts prevent web/mobile/provider divergence. Authenticate pairing; bind local server to loopback by default. |
-| Browser | Electron WebContentsView plus a restricted automation broker | Same visible session for user and agent. Isolated account partitions, explicit takeover, and persistent state. |
-| Credentials | OS-backed encrypted vault plus isolated broker | macOS Keychain-backed encryption; Android Keystore. Encryption alone does not keep an unrestricted same-user agent from reading secrets. |
+| Browser | Host-owned Chromium through Playwright/CDP with an embedded remote viewer | Same visible session for user and agent. Account partitions, explicit takeover and persistent state. |
+| Credentials | Application-encrypted shared vault and trusted backend credential-use functions | No Mac-Keychain dependency or separate vault service. Both clients use the same vault; secrets stay out of model messages and logs. |
 | Tests | Vitest for domain/adapters; Playwright for web/Electron; native Android instrumented tests and emulator journeys | Tests assert outcomes, replay, failure, isolation and permissions. Visual tests use synthetic data. |
 | Feed | Official HN API, cached extraction, Readability where appropriate, simple explicit-feedback ranking | Low cost and explainable. Summarize only fetched content; swipes need no model. |
 
@@ -57,7 +57,7 @@ An exec-only provider may supply its own large system instructions or tool defin
 
 The model asks to fill a credential by opaque ID. A trusted component validates the run, approved origin, account, field and current navigation, then injects the secret without returning it. It redacts captured values and audit payloads. Approval binds to a hash/version of the intended action. A changed destination invalidates the grant.
 
-Browser profiles and vault data must be outside the model execution sandbox. If the provider's shell can read those files, debug the browser, intercept IPC, or invoke arbitrary JS after filling, the claim that it cannot read secrets is false. The first browser spike must prove the isolation boundary, including iframe/redirect/DOM leakage. Separate OS identity, sandbox or VM is a candidate; a second process alone is not an adequate guarantee.
+Keep browser profiles and encrypted vault data in the app's own data directory, outside normal task files. Trusted backend functions handle secret lookup and filling, enforce origin/account checks, and expose redacted browser observations. Use provider permission controls to restrict task tools. The host is trusted. Public-release provider workers do not mount vault/key storage and use standard runtime restrictions. A custom VM or security-service platform is not required.
 
 Store session cookies as sensitive data. Block secret-bearing network/DOM debug output and keep downloaded page instructions untrusted. MFA waits have deadlines and clear recovery. Browser errors and expired sessions are normal product states.
 

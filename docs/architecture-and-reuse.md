@@ -4,52 +4,11 @@ Vesper is its own product, assembled from existing packages and selected source 
 
 This document supersedes any overly broad reading of the initial technology shortlist. Source inspection establishes candidates and constraints. Except for the Croner experiment below, the candidate code was not executed or security-audited. Source tests were read, not run.
 
-## Recommended ownership boundaries
+## Final decision takes precedence
 
-### Direct evidence from Muse
+Read [final-architecture.md](final-architecture.md) for the chosen public-release design. It uses an independent shared backend, a shared encrypted vault without Mac-Keychain dependence, supervised Chromium/provider workers and Mac/Android clients. The user requires operation while the Mac is off. This report preserves source-level reuse findings; local-only Electron hosting was considered and rejected as the default.
 
-Meta's [September 2026 engineering write-up](https://security.muse.ai/) describes a dedicated Linux VM, an unprivileged runtime cell, separate credential and connector services, a permission authority called Sentinel, and durable Postgres state. It inserts real API secrets at the network boundary using surrogate credentials. Its external browser broker exposes accessibility snapshots, prohibits agent JavaScript/devtools access, and pauses agent control during credential filling and user takeover. These details support Vesper's separation of execution, permissions and secrets; they do not prove a local Electron app alone offers equivalent isolation.
-
-Meta's [design account](https://introducing.muse.ai/) explains persistent main chat, side chats, interruptible work, editable memory, deterministic approval UI and artifacts. Vesper preserves those interaction goals while intentionally changing the proactivity policy.
-
-Vesper design judgment: offer a local host first with an enforced execution sandbox, and preserve a compatible self-hosted Linux runner mode for unattended availability and stronger separation. The host can stay reachable without waking an LLM. Do not promise Muse-equivalent isolation until broker and sandbox escape tests pass. Do not attempt to recreate Meta's classifier ensemble or kernel taint tracking as a prerequisite for the initial product; use explicit constrained capabilities and truthful limits.
-
-```mermaid
-flowchart TD
-  Mac[React UI in Electron] --> Client[Shared client state and typed protocol]
-  Android[React Native UI and Kotlin capabilities] --> Client
-  Client --> Host[Vesper host and durable state]
-  Host --> Runs[Run coordinator and provider registry]
-  Host --> Jobs[Explicit schedules and deterministic sync]
-  Runs --> Codex[Codex App Server adapter]
-  Runs --> Claude[Claude Agent SDK adapter]
-  Runs --> ACP[OpenCode and Antigravity adapters]
-  Runs --> API[Custom API or local model adapter]
-  Codex --> Tools[Scoped tool and approval broker]
-  Claude --> Tools
-  ACP --> Tools
-  API --> Tools
-  Tools --> Browser[Visible browser controller]
-  Tools --> Connectors[Typed service connectors]
-  Tools --> Phone[Authorized Android commands]
-  Vault[Isolated credential broker] --> Browser
-  Vault --> Connectors
-  Jobs --> Runs
-  Browser --> Audit[Sanitized results and audit receipts]
-  Connectors --> Audit
-  Phone --> Audit
-  Audit --> Host
-```
-
-The UI does not execute connector writes. Provider adapters do not own browser profiles or credentials. The host owns canonical conversation and task state, while each harness owns its native session. Tool permissions survive changing the model because the broker enforces them outside the model.
-
-Separate three things often conflated in agent projects:
-
-1. The model provider supplies inference and account limits.
-2. The harness manages a model's loop, context, native tools and sessions.
-3. Vesper supplies personal-service capabilities, the shared browser, approval records and the product's durable state.
-
-Do not put a second planner around Codex or Claude for every action. Those harnesses already run an agent loop. Give each a small Vesper tool interface, normalize its events, and let deterministic services do sync/scheduling/ranking. A custom bare-model adapter needs a Vesper-owned loop; that does not mean every harness must use it.
+Meta's [engineering article](https://security.muse.ai/) and [design account](https://introducing.muse.ai/) were inspected to understand the reference. Vesper retains useful product behavior without copying Meta's cloud VM or custom security infrastructure.
 
 ## What to take from T3 first
 
@@ -69,11 +28,11 @@ All T3 paths below refer to commit `ab099178a7b7f9728843e90fc95ed90bb61d710d`, r
 | Streaming UI | [apps/web/package.json](https://github.com/pingdotgg/t3code/blob/ab099178a7b7f9728843e90fc95ed90bb61d710d/apps/web/package.json), [apps/mobile/package.json](https://github.com/pingdotgg/t3code/blob/ab099178a7b7f9728843e90fc95ed90bb61d710d/apps/mobile/package.json) | Reuse libraries and selected hooks, create Muse-specific visuals | T3 uses Base UI, TanStack Router, Legend List, Zustand, React Markdown, Expo, Gesture Handler, Reanimated and keyboard-controller. These solve mechanics; importing T3's chat page would import the wrong UX. |
 | Worktree/PR operations | `t3.json`, setup scripts, AGENTS.md, PR template, CI | Already adapted at the workflow level | Isolated tasks, scoped checks, current-head review, evidence uploads. No paid runner labels or private developer state copied. |
 
-### The Effect decision is real
+### Use T3 code without inheriting its entire framework
 
 The pinned T3 workspace uses Effect and platform packages at `4.0.0-rc.115`. The two protocol packages are private, source-exporting packages. Their runtime package dependency is Effect, and their tests/generators depend on matching platform/test/codegen tools. A static import scan found no T3 product package imports in those two packages, which makes them cleaner extraction candidates than the full adapters.
 
-Recommendation: run one contained compatibility spike before bootstrap locks the backend stack. Compare a pinned extraction of those packages against the official ACP SDK and a minimal Codex App Server client. Choose the T3 packages if their tested protocol handling saves more work than carrying the pinned prerelease Effect dependency. Keep Effect confined to host/protocol services; React Native screens should consume plain typed state.
+Default recommendation: plain TypeScript async functions and the official SDKs. Adapt T3's small translation, lifecycle and session helpers with their tests. The private Effect protocol packages remain optional reuse candidates if an extraction demonstrably reduces total code and maintenance. Do not make an Effect migration or a framework comparison project a prerequisite for starting Vesper.
 
 Do not mix Effect 3 examples with these Effect 4 packages. Preserve generation input/version and protocol fixtures. Generated lines do not consume model context unless loaded, but they do create maintenance obligations. Do not delete them blindly to make the repo look smaller.
 
@@ -121,11 +80,11 @@ Inspected Stagehand commit `70f4e91f1983677c1e8ca9a86f0b738f828d059a`, MIT. Its 
 
 Use Stagehand only when semantic page recovery/extraction reduces work. Default to the selected harness plus deterministic browser tools, so an action does not silently incur a second model bill. Its [cacheService.ts](https://github.com/browserbase/stagehand/blob/70f4e91f1983677c1e8ca9a86f0b738f828d059a/packages/extension/services/cacheService.ts) sends trees to Browserbase cache routes and requires an API key/session. The hosted cache is not a reusable offline cache. Local Vesper caching must be its own account-scoped, secret-free result/action cache.
 
-A CDP attachment to Electron's embedded guest must be proven in the browser spike. General Chromium compatibility is not enough to promise every guest API works. Never expose a public debugging port that lets a model or unrelated site bypass the broker.
+Electron guest attachment was considered for a Mac-hosted variant. The final independent-host design uses host Chromium instead. Its browser automation and remote viewer still need compatibility tests. Never expose a public debugging port that bypasses app permissions.
 
-### Sandbox Runtime: evaluate a maintained OS boundary
+### Sandbox Runtime: optional, not launch infrastructure
 
-[Anthropic Sandbox Runtime](https://github.com/anthropics/sandbox-runtime), Apache-2.0, offers a library and CLI for process-tree filesystem, network and IPC restrictions using native OS mechanisms. It is explicitly a research preview. It is a candidate dependency for Vesper's untrusted command workers, rather than inventing platform-specific sandbox rules from scratch. Its read defaults are permissive unless configured; Vesper must restrict vault/profile paths and broker/debug sockets explicitly. Validate whether each harness can run within the chosen boundary without breaking supported login. Domain allowlists alone do not enforce connector method/account approval or block data leakage to every allowed host. This complements the broker; it does not replace it.
+[Anthropic Sandbox Runtime](https://github.com/anthropics/sandbox-runtime), Apache-2.0, is a research-preview library for OS restrictions. Keep it as a reference if unrestricted shell execution later needs an additional boundary. Prefer each harness's existing permission controls now. Do not add this runtime, a VM, or an egress service merely to store and fill a password.
 
 ### Min: password form detection, not its trust model
 
@@ -135,7 +94,7 @@ Inspected [minbrowser/min](https://github.com/minbrowser/min/tree/c92079cde045c3
 - `js/sessionRestore.js` is a reference for restoring tabs and session state.
 - `js/passwordManager/keychain.js` requests credential collections through renderer IPC. Do not copy this API for Vesper: the model-facing renderer must not enumerate password values. Adapt form detection only after reviewing origin and frame behavior.
 
-Use Electron safeStorage/OS Keychain and Expo SecureStore as maintained platform primitives. Neither substitutes for an isolated secret broker or prevents a privileged local harness from reading an unlocked process.
+Use the application-encrypted shared vault in the final architecture. Platform secure storage may hold a device connection token, not a second website vault. Keep decrypt/fill in trusted backend functions and omit model-facing reveal/export-secret APIs.
 
 ### Goose and nanobot: small logic and test ideas
 
@@ -147,7 +106,7 @@ Use Electron safeStorage/OS Keychain and Expo SecureStore as maintained platform
 
 [DBOS TypeScript](https://github.com/dbos-inc/dbos-transact-ts/tree/684acb56fdcf1b6a9542c9c7cff0b05815aad082), MIT, directly provides durable workflows, queues, timers, notifications and schedules. Its inspected package and README require Postgres. `src/scheduler/scheduler.ts` includes pause state, timezone, automatic backfill and ownership. Prefer it over inventing distributed workflow execution if Vesper later requires a continuously reachable remote host with Postgres.
 
-For the first local Mac host, SQLite plus a narrow job state machine avoids operating Postgres solely for scheduling. This is a deliberate remaining piece of Vesper code, with crash/idempotency tests, not a claim that Croner makes jobs durable. Temporal is a strong option for larger distributed deployments; both systems still need external-effect idempotency because a browser click or email send cannot be atomically committed with their database.
+For the initial single-owner shared host, SQLite plus persistent job state avoids operating Postgres solely for scheduling. This requires crash/idempotency tests; Croner alone does not make jobs durable. DBOS/Temporal remain alternatives for a future distributed deployment, not initial dependencies. External effects still need reconciliation because browser clicks and emails cannot be atomically committed with a local database.
 
 ### OpenHands: useful reference, different runtime
 
@@ -175,7 +134,7 @@ Keep relational current state plus an append-only audit, rather than copy T3's e
 
 Use a transaction to claim a job and record intended work; use an outbox/receipt to publish the result. Retry reads freely within budgets, but recover writes by idempotency key or checking the remote outcome. A crash after a remote write but before local success is an unknown outcome, not permission to repeat the action blindly. Calendar reconciliation identifies source events and detects manual edits.
 
-The Mac hosts browser and harness processes initially. Android is a paired UI and native capability endpoint. It cannot run the Mac's CLI binaries. When the Mac is off, remote agent work waits unless the user has configured an independent host. The phone can still use supported local clock/notification APIs within Android restrictions. This split reuses T3's host/client concept without pretending every feature runs on every device.
+The independent shared host runs browser and harness processes. Mac and Android are clients and device-capability endpoints. Android cannot run Mac CLI binaries; it controls host-side runtimes. Shared work continues when the Mac is off, while tasks requiring an offline device wait explicitly.
 
 ## How agents should import code
 
@@ -187,8 +146,8 @@ No third-party application source has been copied into Vesper in this research p
 
 ## First reuse decisions for future coding
 
-- V02/V03 must resolve the Effect protocol-package compatibility spike and pin the chosen versions before agents branch into provider work.
-- V04 should reuse T3 session partition behavior/tests and validate an isolated broker with the simplest embedded-browser controller. Do not inherit T3 preview preferences.
+- V02/V03 should start with plain TypeScript, official provider interfaces and small shared types. Pin versions; do not build a framework or distributed backend.
+- V04 should adapt T3 profile lifecycle behavior/tests to host-owned Chromium. Shared credential use is a backend module. Do not inherit T3 preview preferences.
 - V07/V09 should prefer T3 protocol package extraction or official SDK dependencies over writing RPC parsing from scratch.
 - V08 should use the official Claude SDK and adapt T3's event/approval edge cases, with the subscription eligibility gate preserved.
 - V12 should use Croner for date calculation and selected OpenClaw edge-case tests, while implementing a small durable state boundary.

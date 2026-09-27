@@ -1,168 +1,168 @@
 [
   {
     "key": "V01",
-    "title": "Capture remaining Muse views and motion references",
+    "title": "Define the complete Muse experience Vesper must match",
     "dependsOn": [],
     "area": "reference",
-    "acceptance": "Directly inspect Android, active browser takeover, search, pending approvals, identity editing and all dialogs. Read remaining expanded initial-thread messages without retaining secrets. Record matched dimensions, animation duration/easing and reduced-motion behavior. Keep captures selective and outside git; distinguish observed facts from inferred behavior.",
+    "acceptance": "An agreed product reference covers every Muse screen, navigation destination, dialog, gesture and animation on Mac and Android. It identifies populated, empty, loading, error and permission states, original Vesper branding, accessibility expectations and explicit Vesper differences. Remaining reference gaps are visible so later feature work has a clear target.",
     "linearId": "IMR-5",
     "linearUrl": "https://linear.app/imraghavojha/issue/54e9dd94-32af-41b0-ae86-b77961394faa"
   },
   {
     "key": "V02",
-    "title": "Bootstrap React desktop and React Native workspace",
+    "title": "Use Vesper on Mac and Android with one shared workspace",
     "dependsOn": [],
     "area": "foundation",
-    "acceptance": "Pin compatible Node, package manager, React, Electron, Expo and TypeScript versions. Establish apps/web, desktop, mobile, server and shared contracts/client-runtime. One command launches isolated development state. CI typechecks/builds relevant clients and runs real tests. No feature claim from placeholder screens.",
+    "acceptance": "A user can open Vesper on Mac and Android, connect both to the same shared workspace, and see the same account and connection status. Shared services and scheduled work remain available when the Mac is off. Setup explains device-specific and offline limits. Restarting either app preserves the workspace.",
     "linearId": "IMR-6",
     "linearUrl": "https://linear.app/imraghavojha/issue/985f227d-b01a-462c-b544-2fff3d773368"
   },
   {
     "key": "V03",
-    "title": "Define durable run, approval and provider contracts",
+    "title": "Keep conversations, settings and actions consistent across devices",
     "dependsOn": [
       "V02"
     ],
     "area": "foundation",
-    "acceptance": "Shared schemas cover chat, goals, schedule, provider capabilities, tool calls, approval state and durable receipts. Prove restart/replay ordering, stale-version rejection and migration rollback/recovery with synthetic fixtures. Establish event IDs and idempotency before parallel feature work.",
+    "acceptance": "Messages, side chats, goals, reminders, activity, approvals, identity and settings stay consistent across Mac and Android. Reconnecting restores missed updates without duplicates. Simultaneous edits have an understandable result. An action approved, cancelled or completed on one device is reflected on the other.",
     "linearId": "IMR-7",
     "linearUrl": "https://linear.app/imraghavojha/issue/24bb5e81-16e1-4e90-9126-46d9eff5791e"
   },
   {
     "key": "V04",
-    "title": "Prove embedded browser session and vault isolation",
+    "title": "Use one shared signed-in browser from Mac and Android",
     "dependsOn": [
       "V02",
       "V03"
     ],
     "area": "browser",
-    "acceptance": "Use fake test credentials and local test sites to prove same visible user/agent session, persisted per-account profiles, immediate takeover/cancel, HTTPS origin and redirect checks. Demonstrate the model shell, DOM reads, logs and screenshots cannot recover secrets. Decide isolation architecture from evidence; do not claim a separate process alone is sufficient.",
+    "acceptance": "User and agent can use the same browser task and saved login session from either device. Show tabs, navigation, loading and failures. User takeover immediately pauses agent input. Accounts remain separate, sessions survive restart, and the user can clear one session without clearing others. The browser clearly identifies where it is running.",
     "linearId": "IMR-8",
     "linearUrl": "https://linear.app/imraghavojha/issue/553b84e6-e92d-4d90-979f-7f557f78717e"
   },
   {
     "key": "V05",
-    "title": "Build secure store and credential-request resume flow",
+    "title": "Save and manage shared website logins and custom tokens",
     "dependsOn": [
       "V01",
       "V04"
     ],
     "area": "browser",
-    "acceptance": "Match domain list and URL/Username/Password form, validation/focus/reveal states and chat request card. Secret capture bypasses transcript; broker consumes opaque IDs. Tests cover cross-origin/iframe leakage, account separation, revoked grants, expiration, cancellation and resumed task. Never use real credentials in CI.",
+    "acceptance": "Add, update and remove credentials from Mac or Android and use them for authorized tasks started from either device. Preserve Muse's separate secure-entry form and resume a waiting task after submission. Keep passwords/tokens out of conversation and activity content. Show domain/account, locked or unavailable state, revocation and recovery. Saved logins belong to the shared workspace rather than one device.",
     "linearId": "IMR-9",
     "linearUrl": "https://linear.app/imraghavojha/issue/2175c734-16a1-493d-b0f6-e94b420d686d"
   },
   {
     "key": "V06",
-    "title": "Add provider registry, picker and portable handoff",
+    "title": "Choose an agent, account and model for each conversation or schedule",
     "dependsOn": [
       "V03"
     ],
     "area": "providers",
-    "acceptance": "Composer and schedule editor choose harness/account/model with capability and usage status. Switching creates a truthful provider handoff while preserving Vesper chat and artifacts. Stop active runs first, invalidate pending approvals and never transfer hidden reasoning. Contract tests prove no silent account or paid-provider fallback.",
+    "acceptance": "The user can select a supported harness, account and model without leaving Vesper. Show availability, capabilities, usage limits and errors. Switching preserves visible conversation, files and goals, and clearly explains continuation limits. Do not silently switch accounts, use a paid fallback or carry an old approval into a changed action.",
     "linearId": "IMR-10",
     "linearUrl": "https://linear.app/imraghavojha/issue/bb2e04b0-4d29-4eb6-b3da-edb838ca8ec2"
   },
   {
     "key": "V07",
-    "title": "Integrate Codex App Server and bounded exec jobs",
+    "title": "Use Codex as Vesper's agent",
     "dependsOn": [
       "V06",
       "V04"
     ],
     "area": "providers",
-    "acceptance": "Support installed authenticated Codex via documented interfaces, streaming, resume, tool approvals, interrupt and bounded exec. Discover models/capabilities. Run common adapter contract suite; optional authorized live smoke. Record Vesper-added context and usage without exposing account tokens.",
+    "acceptance": "Connect an eligible existing Codex account or supported API configuration. Chat, use Vesper's browser and connected services, approve or deny actions, stop work and resume conversations. Show streaming progress, model selection and usage-limit/authentication errors consistently on Mac and Android.",
     "linearId": "IMR-11",
     "linearUrl": "https://linear.app/imraghavojha/issue/f84340ba-d4a9-41b0-9608-bbd0384892e8"
   },
   {
     "key": "V08",
-    "title": "Integrate Claude Agent SDK and verify subscription eligibility",
+    "title": "Use Claude as Vesper's agent",
     "dependsOn": [
       "V06",
       "V04"
     ],
     "area": "providers",
-    "acceptance": "Study pinned T3 ClaudeAdapter and current Anthropic docs. Implement supported SDK sessions, approval callbacks, custom tools, streaming, cancellation and account isolation. Verify subscription eligibility separately from technical feasibility; API path remains available without silent billing fallback. Bare mode must not be advertised as subscription-compatible.",
+    "acceptance": "Connect Claude through a supported account or API option. Chat, use connected services and the shared browser, answer questions, approve or deny actions, stop work and resume where supported. Show actual model eligibility and usage limits. Never silently change billing or claim unavailable subscription access.",
     "linearId": "IMR-12",
     "linearUrl": "https://linear.app/imraghavojha/issue/68b2b780-4a4c-4013-b4c3-22c827e921b7"
   },
   {
     "key": "V09",
-    "title": "Integrate OpenCode and Antigravity adapters",
+    "title": "Use OpenCode and Antigravity as Vesper agents",
     "dependsOn": [
       "V06",
       "V04"
     ],
     "area": "providers",
-    "acceptance": "Use OpenCode server/events and official Antigravity ACP interfaces. Support auth/model discovery, resume where supported, cancel, permission mapping, provider errors and limits. Separate account instances. Mark unsupported capabilities honestly. Split into separate PRs per adapter if independently reviewable.",
+    "acceptance": "Choose OpenCode or Antigravity, select available accounts/models, and use the same Vesper chat, browser, approvals and connected services. Preserve resumable history where supported and clearly label unsupported features. Authentication failure, quota limits and cancellation have honest, recoverable states.",
     "linearId": "IMR-13",
     "linearUrl": "https://linear.app/imraghavojha/issue/5a84dcce-b149-4dbd-9ea9-728a397121e1"
   },
   {
     "key": "V10",
-    "title": "Clone desktop navigation, main chat and side chats",
+    "title": "Use main chat, side chats and search like Muse",
     "dependsOn": [
       "V01",
       "V02",
       "V03"
     ],
     "area": "ui",
-    "acceptance": "Match rail, resizable sidebar, main conversation, composer, unread markers, channel labeling and side-by-side chat. Wire durable messages and provider picker, not canned replies. Demonstrate streaming, attachments, reply/copy/reaction, cancel, empty/error states, focus and keyboard behavior with synthetic reference-like data.",
+    "acceptance": "Match Muse's rail, chat sidebar, main conversation, composer, unread indicators and side-by-side chat. Support real streamed replies, attachments, dictation, message replies, copy, reactions, cancel/retry and named side chats. Search finds relevant conversations and items. History and unread state remain consistent across devices.",
     "linearId": "IMR-14",
     "linearUrl": "https://linear.app/imraghavojha/issue/2ea97df0-575d-4df9-9af5-9bff585661e9"
   },
   {
     "key": "V11",
-    "title": "Clone activity, approvals, upcoming and identity panels",
+    "title": "Inspect activity, approvals, upcoming work and identity",
     "dependsOn": [
       "V01",
       "V03",
       "V10"
     ],
     "area": "ui",
-    "acceptance": "Match all four right tabs, original avatar placement and status. Activity links to real receipts. Approvals bind exact action/account/origin; stale changes require a fresh grant. Upcoming derives canonical schedules. Identity has editable versioned memory and forget. Provide pending/error/history states and motion evidence.",
+    "acceptance": "Match all four agent-panel tabs and avatar/name/status placement. Activity shows actual outcomes and links to related work. Approvals show exact action/account/destination and support deny and revocation. Upcoming shows truthful next-run times. Identity and memory can be edited and forgotten. Changes appear on both devices.",
     "linearId": "IMR-15",
     "linearUrl": "https://linear.app/imraghavojha/issue/bc631fbf-d118-4801-9c52-affedd29e120"
   },
   {
     "key": "V12",
-    "title": "Implement schedules, reminders and goals without heartbeat",
+    "title": "Track goals and run only requested reminders and schedules",
     "dependsOn": [
       "V03"
     ],
     "area": "automation",
-    "acceptance": "Durable jobs with per-run budgets, leases, idempotency, pause/resume and explicit trigger provenance. Prove zero model invocations during idle fake-clock intervals. Test February/leap years, months with 30/31 days, DST, timezone edits, sleep/missed runs, restart and duplicate delivery. Goal text and next run use the same schedule.",
+    "acceptance": "Create, edit, pause, resume, complete and reopen goals and reminders. Scheduled work runs only under explicit user instructions, with visible cause and next time. True month-end dates, timezones and daylight saving are correct. Restart, missed runs and repeated attempts do not duplicate real-world actions. No unsolicited heartbeat or suggestions.",
     "linearId": "IMR-16",
     "linearUrl": "https://linear.app/imraghavojha/issue/bb51dbc5-387d-4211-acda-810fd0b31a3f"
   },
   {
     "key": "V13",
-    "title": "Connect multiple Google calendars and Gmail accounts",
+    "title": "Manage multiple Google calendars and Gmail accounts",
     "dependsOn": [
       "V03",
       "V05"
     ],
     "area": "integrations",
-    "acceptance": "Use supported OAuth and per-account/calendar sync cursors. Cover Gmail history recovery, Calendar 410, pagination, refresh/revocation, wrong-account protection and conditional updates. Demonstrate drafts and explicit send approval, agenda/conflicts and deduplicated event writes. Add Contacts/Tasks capability tickets if not one reviewable change.",
+    "acceptance": "Connect multiple accounts, view agendas and conflicts, create or change events, search/read mail, work with attachments and prepare drafts. Always identify the target account/calendar or sender. Sending and other significant changes follow the user's permissions. Reconnect and revoked-access states are clear; syncing does not duplicate events.",
     "linearId": "IMR-17",
     "linearUrl": "https://linear.app/imraghavojha/issue/8163be7b-9e46-4457-bdd6-c99fba17944a"
   },
   {
     "key": "V14",
-    "title": "Add Canvas custom token connector",
+    "title": "Track Canvas courses and coursework",
     "dependsOn": [
       "V03",
       "V05"
     ],
     "area": "integrations",
-    "acceptance": "Institution base URL and token captured securely. Discover and display actual courses, assignments, submission status, announcements and permitted grades/materials. Cover pagination, token expiry, 403, rate limits and unsupported endpoints. Scheduled checks only when requested; use synthetic course fixtures.",
+    "acceptance": "Connect the user's institution using securely entered credentials or token. Show the courses, assignments, submission status, announcements, grades and materials the account can actually access. Explain missing permissions and expired access. Track coursework only when requested, and make updates available on Mac and Android.",
     "linearId": "IMR-18",
     "linearUrl": "https://linear.app/imraghavojha/issue/344ed2d0-8295-4eda-a69f-7fbfa2adeb88"
   },
   {
     "key": "V15",
-    "title": "Add SubItUp monthly reconciliation and Outlook browser fallback",
+    "title": "Reconcile SubItUp shifts and access permitted Outlook mail",
     "dependsOn": [
       "V04",
       "V05",
@@ -170,26 +170,26 @@
       "V13"
     ],
     "area": "integrations",
-    "acceptance": "Preserve the employee SSO route and existing session; do not repeatedly log out to test MFA. Last-day job compares whole next month against selected calendar, displays a diff and applies only scoped changes without duplicates. Outlook uses Graph when allowed or permitted browser session. Separate PRs for the two connectors. MFA failure pauses/notifies; no guessed approval buttons.",
+    "acceptance": "Use the correct employee sign-in route and reuse existing valid sessions. On the requested last day of the month, compare the entire next month's posted shifts with the selected calendar, show discrepancies and make only authorized corrections. Access Outlook through permitted account access. Pause and notify for reauthentication; do not repeatedly force logouts or guess MFA actions.",
     "linearId": "IMR-19",
     "linearUrl": "https://linear.app/imraghavojha/issue/a1b9bce6-bd1d-46e3-8427-bc058ac5edc4"
   },
   {
     "key": "V16",
-    "title": "Build Hacker News feed with swipe learning",
+    "title": "Read an AI and coding feed that learns from swipes",
     "dependsOn": [
       "V01",
       "V03",
       "V10"
     ],
     "area": "feed",
-    "acceptance": "Clone editorial feed presentation for explicit AI/coding topics only. Fetch official HN metadata and actual article content; cite sources and distinguish comments. Left less/right more-and-save, accessible buttons/keys, undo, explain ranking, reset/export. Cache summaries, dedupe links, no LLM per swipe and no implicit refresh schedule.",
+    "acceptance": "Show Muse-style editorial cards for explicitly selected AI/coding topics from Hacker News. Include grounded summaries, source and discussion links, dates and why an item was recommended. Swipe left for less like it, right for more and save; provide buttons, keyboard controls and undo. Avoid duplicates, support preference reset, and refresh only when requested or scheduled.",
     "linearId": "IMR-20",
     "linearUrl": "https://linear.app/imraghavojha/issue/9bbe40e8-d5b2-427a-b486-b30b738c04b4"
   },
   {
     "key": "V17",
-    "title": "Clone settings, library and on-demand ideas",
+    "title": "Use complete settings, library and on-demand ideas",
     "dependsOn": [
       "V01",
       "V05",
@@ -197,13 +197,13 @@
       "V10"
     ],
     "area": "ui",
-    "acceptance": "Preserve all observed settings groups and library filters/search/sort/preview. Wire truthful supported controls, themes, shortcuts, dictation, devices, permissions and data export. Sandbox web artifacts. Original Vesper identity replaces Meta-specific account/plan text. Ideas only on request. Track unsupported integrations visibly; no dead controls presented as working.",
+    "acceptance": "Preserve Muse's settings groups and library categories, search, sort and previews. Appearance, shortcuts, dictation, devices, permissions, provider choices and data export work and show truthful states. Shared preferences appear on both devices. Ideas are generated only when requested. Unavailable integrations are clearly distinguished from working ones.",
     "linearId": "IMR-21",
     "linearUrl": "https://linear.app/imraghavojha/issue/b3013a16-0b72-46ba-9d38-3adf26e06792"
   },
   {
     "key": "V18",
-    "title": "Build Android navigation and shared client parity",
+    "title": "Use the complete Muse-style experience on Android",
     "dependsOn": [
       "V01",
       "V03",
@@ -211,37 +211,37 @@
       "V11"
     ],
     "area": "android",
-    "acceptance": "React Native/Expo development build renders mobile chat/drawers, four agent tabs, feed gestures, goals, library and settings using shared contracts. Validate reconnect/offline/cache state, keyboard/back gestures, screen reader and reduced motion. Emulator setup comes from official Android tools; no personal account login in test images.",
+    "acceptance": "Android includes main/side chats, drawers, all four agent tabs, feed gestures, goals, library and settings, matching the mobile Muse reference. Changes made on Mac appear on Android and vice versa. Handle reconnect/offline state, back navigation, keyboard, accessibility and reduced motion without losing work.",
     "linearId": "IMR-22",
     "linearUrl": "https://linear.app/imraghavojha/issue/32ea4850-9a32-42e3-a048-681bf928d988"
   },
   {
     "key": "V19",
-    "title": "Add Android alarms, assistant invocation and device capability checks",
+    "title": "Invoke Vesper as Android assistant and control alarms",
     "dependsOn": [
       "V18"
     ],
     "area": "android",
-    "acceptance": "Implement native supported alarm/timer intents, permission-aware audio controls and default assistant service. Confirm outcomes instead of reporting intent dispatch as success. Validate locked/unlocked, denied permissions, battery restrictions and Nothing Phone invocation separately from emulator. No idle LLM/hotword loop unless explicitly requested.",
+    "acceptance": "On supported devices, the user can choose Vesper as the default assistant and invoke it through the available system gesture or button. Create/manage supported alarms and timers and adjust permitted clock settings. Report confirmed outcomes, denied permission and unsupported behavior accurately. Validate the user's Nothing Phone experience, not only a simulated device.",
     "linearId": "IMR-23",
     "linearUrl": "https://linear.app/imraghavojha/issue/c1196f3b-a81f-4f3a-8506-5c69ff0baaf3"
   },
   {
     "key": "V20",
-    "title": "Evaluate Google Messages and scoped phone automation",
+    "title": "Use Google Messages and opt-in phone capabilities",
     "dependsOn": [
       "V04",
       "V05",
       "V18"
     ],
     "area": "android",
-    "acceptance": "Validate current Google-account/emoji pairing and session expiry with authorized test use. Document phone connection and one-active-computer limitations. Separate notification listener/actions from general accessibility; inspect Google Play restrictions. No broad permission grant or message sending without explicit user action. Produce supported/experimental capability matrix.",
+    "acceptance": "Pair supported Google Messages access, show connection/expiry state and require the appropriate permission before sending. Make phone notification access and actions separately opt-in and revocable. Explain phone connectivity and device limitations. Distinguish supported functionality from experimental automation; do not promise universal control.",
     "linearId": "IMR-24",
     "linearUrl": "https://linear.app/imraghavojha/issue/3bc5535c-ddbe-4e68-a2d4-56ad521e8c93"
   },
   {
     "key": "V21",
-    "title": "Verify end-to-end reliability, isolation and visual parity",
+    "title": "Deliver reliable, synced behavior and verified Muse parity",
     "dependsOn": [
       "V05",
       "V07",
@@ -258,40 +258,40 @@
       "V20"
     ],
     "area": "release",
-    "acceptance": "Exercise real configured harnesses with fake browser services, crash/restart, duplicate jobs, expired auth and approvals, malicious page content, vault leakage and offline devices. Demonstrate month-end calendar journey and zero idle model calls. Compare every required view and animation against reference; report gaps instead of passing placeholders.",
+    "acceptance": "The complete product works across the selected agents and both devices. Demonstrate a shared saved-login journey, a month-end calendar reconciliation, interruption/restart recovery, offline/reconnect behavior and correct approvals. No duplicate external actions or secret exposure in user-visible activity. Every required screen and interaction meets the reference or has an explicit remaining gap. Public installers and updates preserve user data; failed upgrades and backups have a usable recovery path. Browser/provider failure does not take down the workspace, and supported client/provider versions continue working across updates.",
     "linearId": "IMR-25",
     "linearUrl": "https://linear.app/imraghavojha/issue/10a6d525-2666-43dc-bb57-bc653adb5ca3"
   },
   {
     "key": "V22",
-    "title": "Activate GitHub, Linear and Greptile review automation",
+    "title": "Track development from Linear issue to reviewed GitHub change",
     "dependsOn": [],
     "area": "workflow",
-    "acceptance": "Finish account/app authorizations limited to Vesper where supported, no paid plan/overages. Verify GitHub required checks, Linear branch/PR linking and Greptile review on a test PR's latest SHA. Resolve comments through bounded babysitting. Record actual installations and any credit/eligibility limits; configuration alone is not activation.",
+    "acceptance": "Vesper work is organized in Linear and linked to the corresponding GitHub PR. Checks and reviewer findings are visible; genuine findings are resolved before completion. A future agent can identify the next available task and its acceptance criteria. Review services stay within authorized free usage and disclose any expiration or unavailable tier.",
     "linearId": "IMR-26",
     "linearUrl": "https://linear.app/imraghavojha/issue/15068606-4e2b-47b2-8a1f-0216aecce4d1"
   },
   {
     "key": "V23",
-    "title": "Extend Muse integration catalog and wallet parity",
+    "title": "Offer the broader Muse integration catalog and wallet features",
     "dependsOn": [
       "V03",
       "V05",
       "V17"
     ],
     "area": "integrations",
-    "acceptance": "Inventory every observed catalog entry against current official API/partner availability. Add eligible integrations in small PRs with permissions, reconnect and contract tests. Research wallet provider and approval requirements before transactions. This remains in full-parity scope; do not fake unavailable partner services or copy Meta account features.",
+    "acceptance": "Keep the full observed integration catalog in scope. Each entry accurately shows whether it can connect, is connected, needs attention or is unavailable. Connected services support permissions, reconnect and disconnect. Wallet actions require an actual supported payment service and explicit transaction approval. Never present a planned service as already functional.",
     "linearId": "IMR-27",
     "linearUrl": "https://linear.app/imraghavojha/issue/ad6ffaa2-4071-4ad0-ad42-89ec2a32eb5f"
   },
   {
     "key": "V24",
-    "title": "Create original Vesper avatar and motion assets",
+    "title": "Give Vesper an original cute avatar with expressive motion",
     "dependsOn": [
       "V01"
     ],
     "area": "ui",
-    "acceptance": "Create an original cute mascot with the reference's visual scale and warmth. Define idle/listening/thinking/error states, measured transitions and reduced-motion stills. Stop animation when hidden. Export licensed/original web and native assets; no copied Muse mascot or unnecessary GPU repaint loop.",
+    "acceptance": "Create an original mascot with Muse-like warmth, scale and placement, without copying Muse's asset. Support idle, listening, working and error states, editable name and appearance, reduced-motion stills and consistent rendering on Mac/Android. Motion should remain smooth and stop when not visible.",
     "linearId": "IMR-28",
     "linearUrl": "https://linear.app/imraghavojha/issue/f71b6da1-f977-47bd-a6cd-1dc459f194e1"
   }

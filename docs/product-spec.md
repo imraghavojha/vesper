@@ -1,6 +1,6 @@
 # What we are making
 
-Vesper is a personal assistant for one person's real daily work. It remembers conversations, operates a browser the person can see and take over, connects accounts, tracks goals, and runs explicitly scheduled jobs. It starts with macOS and Android. React powers the desktop UI; React Native powers mobile.
+Vesper is a publicly releasable personal assistant for one person's real daily work. It remembers conversations, operates a browser the person can see and take over, connects accounts, tracks goals, and runs explicitly scheduled jobs. It starts with macOS and Android, synced through an independent shared host. Scheduled work and shared services continue when the Mac is off. React powers the desktop UI; React Native powers mobile.
 
 The target is Muse's layout and interaction model with Vesper branding and an original cute avatar. This is a product specification, not a step-by-step implementation plan. The research document records recommended technologies and unresolved choices.
 
@@ -12,7 +12,7 @@ Interchangeable agent harnesses are a core feature. The composer and schedule ed
 - Runs start from a user request, an enabled schedule, or an event trigger the user explicitly configured. Transport keepalives and deterministic sync are not model runs.
 - Every run shows its cause, account, status, outcome, and relevant approval. Failure and uncertainty must remain visible.
 - The browser and secure login flow are first-class product features. A demo chat shell without these is not a working Vesper.
-- Secrets never enter chat, prompts, model-visible tool output, screenshots, analytics, or review artifacts. This requires isolation beyond encryption at rest.
+- Credential capture and filling use trusted app code and OS-encrypted storage. Secrets stay out of chat, prompts, model-visible tool output, screenshots, analytics and review artifacts. Use a shared vault accessible from both clients, with tested host and worker access controls.
 - Multiple accounts are separate identities. Every write names the destination account and calendar/mailbox.
 - Desktop and mobile share meaning and state. They need not force identical components across DOM and native rendering.
 
@@ -70,7 +70,7 @@ Goals contain a title, description, status, related tasks, approved monitoring r
 
 An enabled schedule contains one canonical recurrence, timezone, next run, target account, permissions, retry policy, and run budget. Its description and next-run display derive from that same record. A monthly last-day rule fires once on February 28 or 29 and once on months ending in 30 or 31. It must not mean all of days 28 through 31.
 
-Jobs survive restarts. They use durable claims and idempotency keys. A duplicate delivery must not duplicate calendar events or send another email. The UI distinguishes an on-time run, missed run, deferred run, authentication block, failure, and cancellation. When the host is asleep or offline, the user sees the missed-run policy. Guaranteed execution while the Mac is off requires an optional reachable host; mobile cannot silently provide an always-on agent server.
+Jobs survive restarts. They use durable claims and idempotency keys. A duplicate delivery must not duplicate calendar events or send another email. The UI distinguishes an on-time run, missed run, deferred run, authentication block, failure, and cancellation. When the host is asleep or offline, the user sees the missed-run policy. An independent reachable host is required so scheduled agent work can continue while the Mac is off. Mobile is not an always-on desktop-harness server.
 
 The representative acceptance journey is a monthly SubItUp check: compare the next month's posted shifts with a selected calendar, propose the exact discrepancy set, apply only permitted changes, record provenance, and notify only for configured outcomes or a blocker.
 
@@ -105,3 +105,7 @@ Every cloned view needs empty, populated, loading, error, disconnected, and rele
 Use reference screenshots at matched dimensions for layout and short recordings for motion. Record duration, easing, interruption behavior, and reduced-motion behavior before claiming exact animation parity. Current screenshots establish some static geometry; they do not establish exact animation timing.
 
 A usable release completes real browser login with a fake test account, chat through a real configured provider, durable approval/resume, a test calendar reconciliation, an explicit scheduled job with zero idle model calls, and matching results on Android. Run live-provider smoke tests only with the user's authorized accounts; CI uses synthetic fixtures.
+
+## Public release quality
+
+Install and update both apps without losing workspace data. Failed updates, expired connections and interrupted jobs have clear recovery paths. Backups can actually be restored. A browser or provider failure does not take down chat or scheduled work. Supported app/provider versions remain compatible, and incompatible versions offer an understandable update path. The product must be maintainable and tested, not merely the smallest prototype.

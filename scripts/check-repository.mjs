@@ -1,5 +1,7 @@
-import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, lstatSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { resolve, dirname, relative } from 'node:path';
+import { renderBacklog } from './backlog-document.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const issues = JSON.parse(readFileSync(resolve(root, 'docs/backlog.json'), 'utf8'));
@@ -20,13 +22,17 @@ function visit(key) {
 }
 for (const issue of issues) {
   if (!issue.title || !issue.acceptance) errors.push(`Incomplete issue ${issue.key}`);
+  if (!/^IMR-\d+$/.test(issue.linearId ?? '')) errors.push(`Invalid Linear ID ${issue.key}`);
+  if (!/^https:\/\/linear\.app\/imraghavojha\/issue\//.test(issue.linearUrl ?? '')) errors.push(`Invalid Linear link ${issue.key}`);
   visit(issue.key);
 }
-function walk(dir) {
-  for (const name of readdirSync(dir)) {
-    if (['.git', 'node_modules', '.vesper', '.t3'].includes(name)) continue;
-    const file = resolve(dir, name);
-    if (statSync(file).isDirectory()) { walk(file); continue; }
+if (!errors.length && readFileSync(resolve(root, 'docs/backlog.md'), 'utf8') !== renderBacklog(issues)) {
+  errors.push('Backlog Markdown differs from its JSON source. Regenerate with scripts/backlog-document.mjs.');
+}
+const files = new Set(execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], {cwd: root, encoding: 'utf8'}).split('\0').filter(Boolean));
+for (const name of files) {
+    const file = resolve(root, name);
+    if (!existsSync(file) || lstatSync(file).isSymbolicLink()) continue;
     if (name.endsWith('.json')) {
       try { JSON.parse(readFileSync(file, 'utf8')); }
       catch (error) { errors.push(`${relative(root, file)}: ${error.message}`); }
@@ -38,8 +44,6 @@ function walk(dir) {
       if (/^(?:https?:|mailto:|#)/.test(target)) continue;
       if (!existsSync(resolve(dirname(file), target.split('#')[0]))) errors.push(`Broken link in ${relative(root, file)}: ${target}`);
     }
-  }
 }
-walk(root);
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }
 console.log(`Repository checks passed: ${issues.length} issues, valid dependency graph, JSON and local Markdown links. No application tests exist yet.`);

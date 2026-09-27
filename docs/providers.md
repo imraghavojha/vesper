@@ -7,7 +7,7 @@ The product goal is an open Muse equivalent that can use the person's preferred 
 | Harness | Integration | Authentication | Evidence and gate |
 | --- | --- | --- | --- |
 | Codex | App Server for persistent interactive turns; exec for bounded jobs | User-managed supported Codex login or API configuration | Official App Server/noninteractive docs and T3 adapter. Verify account eligibility locally without copying tokens. |
-| Claude | Agent SDK around installed Claude binary, with streamed sessions and approval callbacks | API-backed supported path; subscription route requires current eligibility/approval review | T3 uses `@anthropic-ai/claude-agent-sdk` and `query()`. SDK docs restrict third-party subscription login absent approval. |
+| Claude | Agent SDK around installed Claude binary, with streamed sessions and approval callbacks | User-owned supported Claude login or API path; verify distribution eligibility | T3 uses the Agent SDK. Current Help Center confirms plan usage continues; SDK product-login policy still needs distribution review. |
 | OpenCode | Supported HTTP server/events and native sessions | User-configured OpenCode providers | Discover model list; preserve native provider permissions and usage errors. |
 | Antigravity | Official ACP agent | Its own supported Google login or supported API mode | T3 integration and ACP registry verified; installed access not tested. |
 | Custom API/local model | Explicit endpoint adapter with Vesper-owned tool loop | User-supplied API credential or local endpoint | Must declare structured tool, vision, streaming and context capabilities. A chatbot subscription alone is not an API credential. |
@@ -20,7 +20,7 @@ The statement that Claude cannot be called through commands is incorrect for the
 
 T3's pinned [ClaudeAdapter](https://github.com/pingdotgg/t3code/blob/ab099178a7b7f9728843e90fc95ed90bb61d710d/apps/server/src/provider/Layers/ClaudeAdapter.ts) imports the SDK and creates query sessions. Its [Claude guide](https://github.com/pingdotgg/t3code/blob/ab099178a7b7f9728843e90fc95ed90bb61d710d/docs/user/providers-claude.md) explains existing login/configuration and separate config directories. This is direct technical evidence, not proof of Vesper's permission to offer the same commercial authentication flow.
 
-The [SDK overview](https://code.claude.com/docs/en/agent-sdk/overview) says third-party products need prior approval to offer claude.ai login/rate limits. Keep the technical adapter and eligibility gate distinct. Do not extract OAuth tokens, impersonate another client, or silently change to paid API billing. The local `claude` binary was found; no subscription model call was made.
+The [SDK overview](https://code.claude.com/docs/en/agent-sdk/overview) restricts offering claude.ai login/rate limits in third-party products absent approval. The current [Claude plan usage article](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan) separately says the proposed SDK billing changes were paused and subscription limits still cover SDK, CLI and third-party usage. Do not claim subscription use is categorically unavailable. Verify the supported distribution/login route; never extract tokens or silently change billing. The installed user-owned CLI completed three Opus 5.5 reviews. A Fable request was rejected for unavailable usage credits.
 
 ## Switching and continuity
 

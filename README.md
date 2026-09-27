@@ -1,9 +1,11 @@
 # Vesper
 
-An open personal agent for macOS and Android, with a Muse-style interface, a shared browser, saved logins, and automation that runs only when asked or scheduled.
+An open personal agent for macOS and Android, with a Muse-style interface, a shared browser and vault, interchangeable agents, and automation that runs only when asked or scheduled. An independent shared host keeps Mac and Android synced and works while the Mac is off.
 
 This repository currently contains product research and development setup. There is no application yet.
 
+- [Final architecture](docs/final-architecture.md)
+- [Claude architecture review](docs/architecture-review.md)
 - [Product specification](docs/product-spec.md)
 - [Muse observation record](docs/muse-observations.md)
 - [Technology research and sources](docs/research.md)
