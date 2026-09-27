@@ -544,13 +544,13 @@ function createWindow(mode = "main", section = "general") {
     minWidth: quick ? 380 : settings ? 800 : 900,
     minHeight: quick ? 360 : settings ? 600 : 650,
     show: mode === "main",
-    ...(settings && process.platform === "darwin"
+    ...(!quick && process.platform === "darwin"
       ? {
           titleBarStyle: "hidden",
           trafficLightPosition: { x: 9, y: 9 },
-          minimizable: false,
-          maximizable: false,
-          fullscreenable: false,
+          ...(settings
+            ? { minimizable: false, maximizable: false, fullscreenable: false }
+            : {}),
         }
       : {}),
     alwaysOnTop: quick,

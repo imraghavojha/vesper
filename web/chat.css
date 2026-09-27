@@ -1,6 +1,8 @@
 /* Vesper chat shell. Geometry follows the measured 1485×898 web reference:
    rail 72, sidebar 240, docked panel 359, message/composer column 768. */
 :root {
+  /* Measured reference accent (user bubble), identical in both themes. */
+  --v-accent: rgb(0, 116, 232);
   --v-bg: #ffffff;
   --v-surface: #f1f1f3;
   --v-raised: #ffffff;
@@ -11,7 +13,7 @@
   --v-text: #18181a;
   --v-secondary: rgba(24, 24, 26, 0.56);
   --v-tertiary: rgba(24, 24, 26, 0.36);
-  --v-bubble-user: rgb(0, 116, 232);
+  --v-bubble-user: var(--v-accent);
   --v-bubble-agent: #f0f0f2;
   --v-positive: #2f9e44;
   --v-warning: #b7791f;
@@ -33,7 +35,7 @@
   --v-text: #ffffff;
   --v-secondary: rgba(255, 255, 255, 0.56);
   --v-tertiary: rgba(255, 255, 255, 0.36);
-  --v-bubble-user: rgb(0, 116, 232);
+  --v-bubble-user: var(--v-accent);
   --v-bubble-agent: rgb(31, 31, 32);
   --v-positive: #4cc36a;
   --v-warning: #e3a64b;
@@ -54,7 +56,7 @@
     --v-text: #ffffff;
     --v-secondary: rgba(255, 255, 255, 0.56);
     --v-tertiary: rgba(255, 255, 255, 0.36);
-    --v-bubble-user: rgb(0, 116, 232);
+    --v-bubble-user: var(--v-accent);
     --v-bubble-agent: rgb(31, 31, 32);
     --v-positive: #4cc36a;
     --v-warning: #e3a64b;
@@ -400,6 +402,17 @@
   min-width: 0;
   min-height: 0;
 }
+/* Mac app only: empty toolbar strip matching the native main-window
+   hierarchy (drag space above the thread). Height follows the native crop
+   (~62px at its capture scale); web keeps the measured full-height view. */
+.main-toolbar {
+  flex: none;
+  height: 60px;
+  -webkit-app-region: drag;
+}
+.chat-shell .panel-reveal {
+  -webkit-app-region: no-drag;
+}
 /* Only shown while the agent panel is closed; floats, no header row. */
 .chat-shell .panel-reveal {
   position: absolute;
@@ -739,15 +752,16 @@
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--v-text);
-  color: var(--v-bg);
-  transition:
-    opacity 0.15s,
-    background-color 0.15s;
+  background: var(--v-accent);
+  color: #ffffff;
+  transition: opacity 0.15s;
 }
 .chat-shell .composer-send:disabled {
-  background: var(--v-selected);
-  color: var(--v-tertiary);
+  opacity: 0.4;
+}
+.chat-shell .composer-send--stop {
+  background: var(--v-text);
+  color: var(--v-bg);
 }
 .composer-status {
   min-height: 0;

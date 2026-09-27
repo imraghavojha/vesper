@@ -234,8 +234,9 @@ export const PencilIcon = (p: IconProps) => (
 );
 
 /**
- * Original Vesper avatar: an evening sky with a single bright star over a
- * low horizon. Drawn in SVG so it scales from sidebar to panel sizes.
+ * Original Vesper mascot: a small, squat lilac creature with soft ears, dot
+ * eyes and rosy cheeks, standing in a pale round frame. Hand-authored vector
+ * art (not traced from any reference character); static, no motion.
  */
 export function VesperAvatar({ size = 100 }: { size?: number }) {
   const id = "vesper-avatar" + useId().replace(/:/g, "");
@@ -249,39 +250,69 @@ export function VesperAvatar({ size = 100 }: { size?: number }) {
       focusable="false"
     >
       <defs>
-        <linearGradient id={`${id}-sky`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#1d2340" />
-          <stop offset="0.55" stopColor="#4a3f6b" />
-          <stop offset="0.82" stopColor="#c9798a" />
-          <stop offset="1" stopColor="#f0b48a" />
-        </linearGradient>
-        <radialGradient id={`${id}-glow`} cx="0.64" cy="0.34" r="0.3">
-          <stop offset="0" stopColor="#fff6dc" stopOpacity="0.55" />
-          <stop offset="1" stopColor="#fff6dc" stopOpacity="0" />
+        <radialGradient id={`${id}-frame`} cx="0.5" cy="0.42" r="0.62">
+          <stop offset="0" stopColor="#fbfaf7" />
+          <stop offset="1" stopColor="#e9e5de" />
+        </radialGradient>
+        <radialGradient id={`${id}-fur`} cx="0.42" cy="0.3" r="0.8">
+          <stop offset="0" stopColor="#efeaf6" />
+          <stop offset="0.55" stopColor="#d6cde6" />
+          <stop offset="1" stopColor="#ada1c6" />
+        </radialGradient>
+        <radialGradient id={`${id}-ear`} cx="0.45" cy="0.35" r="0.7">
+          <stop offset="0" stopColor="#e6dff0" />
+          <stop offset="1" stopColor="#b3a8cb" />
         </radialGradient>
         <clipPath id={`${id}-clip`}>
           <circle cx="50" cy="50" r="50" />
         </clipPath>
       </defs>
       <g clipPath={`url(#${id}-clip)`}>
-        <rect width="100" height="100" fill={`url(#${id}-sky)`} />
-        <rect width="100" height="100" fill={`url(#${id}-glow)`} />
-        <path
-          d="M64 22.5c.8 5.6 2.9 7.7 8.5 8.5-5.6.8-7.7 2.9-8.5 8.5-.8-5.6-2.9-7.7-8.5-8.5 5.6-.8 7.7-2.9 8.5-8.5Z"
-          fill="#fff8e6"
+        <rect width="100" height="100" fill={`url(#${id}-frame)`} />
+        {/* ears */}
+        <ellipse
+          cx="35"
+          cy="31"
+          rx="6"
+          ry="8.5"
+          transform="rotate(-18 35 31)"
+          fill={`url(#${id}-ear)`}
         />
-        <circle cx="30" cy="30" r="0.9" fill="#fff" opacity="0.7" />
-        <circle cx="42" cy="18" r="0.7" fill="#fff" opacity="0.55" />
-        <circle cx="22" cy="46" r="0.6" fill="#fff" opacity="0.45" />
-        <path
-          d="M0 80c16-6 30-8 48-5s34 2 52-4v29H0Z"
-          fill="#231d33"
-          opacity="0.92"
+        <ellipse
+          cx="65"
+          cy="31"
+          rx="6"
+          ry="8.5"
+          transform="rotate(18 65 31)"
+          fill={`url(#${id}-ear)`}
         />
+        <ellipse cx="35.6" cy="32" rx="2.6" ry="4.4" transform="rotate(-18 35.6 32)" fill="#f2c9d3" opacity="0.7" />
+        <ellipse cx="64.4" cy="32" rx="2.6" ry="4.4" transform="rotate(18 64.4 32)" fill="#f2c9d3" opacity="0.7" />
+        {/* arms, behind the body edge */}
+        <ellipse cx="24.5" cy="74" rx="6" ry="9" transform="rotate(24 24.5 74)" fill="#b9aecf" />
+        <ellipse cx="75.5" cy="74" rx="6" ry="9" transform="rotate(-24 75.5 74)" fill="#b9aecf" />
+        {/* body: one soft rounded mound running off the bottom of the frame */}
         <path
-          d="M0 88c20-5 38-5 56-2s30 1 44-3v17H0Z"
-          fill="#15121f"
+          d="M50 30c-16.5 0-27 12.5-27 29.5V104h54V59.5C77 42.5 66.5 30 50 30Z"
+          fill={`url(#${id}-fur)`}
         />
+        <ellipse cx="50" cy="84" rx="15" ry="13" fill="#f4f0f8" opacity="0.55" />
+        {/* face */}
+        <ellipse cx="38.5" cy="58.5" rx="3.6" ry="2.2" fill="#f3b3c3" opacity="0.75" />
+        <ellipse cx="61.5" cy="58.5" rx="3.6" ry="2.2" fill="#f3b3c3" opacity="0.75" />
+        <circle cx="43.2" cy="53" r="2.5" fill="#2e2838" />
+        <circle cx="56.8" cy="53" r="2.5" fill="#2e2838" />
+        <circle cx="43.9" cy="52.2" r="0.8" fill="#ffffff" />
+        <circle cx="57.5" cy="52.2" r="0.8" fill="#ffffff" />
+        <path
+          d="M47 58.6q3 2.6 6 0"
+          fill="none"
+          stroke="#2e2838"
+          strokeWidth="1.3"
+          strokeLinecap="round"
+        />
+        {/* a single soft highlight on the crown */}
+        <ellipse cx="44" cy="38" rx="8" ry="3.4" fill="#ffffff" opacity="0.28" />
       </g>
     </svg>
   );

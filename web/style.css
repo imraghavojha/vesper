@@ -41,7 +41,8 @@ summary:focus-visible {
   outline: 3px solid #666666;
   outline-offset: 4px;
 }
-header {
+/* Setup-screen page header only; chat and settings headers style themselves. */
+header:not(.chat-shell *) {
   height: 94px;
   margin: 0 6%;
   display: flex;
@@ -212,7 +213,7 @@ details p {
   margin: 20px 6%;
   color: #954733;
 }
-footer {
+footer:not(.chat-shell *) {
   display: flex;
   justify-content: space-between;
   border-top: 1px solid #dddddd;
@@ -410,7 +411,7 @@ code {
   font-family: ui-monospace, monospace;
 }
 @media (max-width: 850px) {
-  header {
+  header:not(.chat-shell *) {
     height: 75px;
   }
   .setup {

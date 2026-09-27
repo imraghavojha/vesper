@@ -189,6 +189,10 @@ const RUN_LABELS: Record<string, string> = {
   failed: "Failed",
   interrupted: "Interrupted",
 };
+// Rail glyphs: the shared icons draw ~16 of 24 units, so the rail renders
+// them at 32px with a 1.5 stroke (~21px visible shape, 2px line) to match
+// the reference's occupied glyph size inside the 44px circle.
+const RAIL_GLYPH = { size: 32, strokeWidth: 1.5 } as const;
 // Destinations shown for orientation only; none are implemented yet.
 const UNAVAILABLE_DESTINATIONS = [
   { label: "Feed", Icon: FeedIcon },
@@ -324,15 +328,46 @@ export function ConversationScreen({
       remove();
     };
   }, [settingsWindow]);
+  // Overlay panel focus return: remember the launcher, and after any close
+  // path commits, move focus back to it (or a visible fallback launcher).
+  const panelOpener = useRef<HTMLElement | null>(null);
+  const restorePanelFocus = useRef(false);
   function openPanel(tab: PanelTab) {
     setPanelTab(tab);
     if (docked) setPanelHidden(false);
-    else setProviderOpen(true);
+    else {
+      const active = document.activeElement;
+      panelOpener.current = active instanceof HTMLElement ? active : null;
+      setProviderOpen(true);
+    }
+  }
+  function closeOverlayPanel() {
+    restorePanelFocus.current = true;
+    setProviderOpen(false);
   }
   function closePanel() {
     if (docked) setPanelHidden(true);
-    else setProviderOpen(false);
+    else closeOverlayPanel();
   }
+  useEffect(() => {
+    if (providerOpen || !restorePanelFocus.current) return;
+    restorePanelFocus.current = false;
+    const opener = panelOpener.current;
+    panelOpener.current = null;
+    const usable = (element: HTMLElement | null): element is HTMLElement =>
+      !!element &&
+      element.isConnected &&
+      !element.closest("[hidden], dialog:not([open]), .agent-panel") &&
+      element.getClientRects().length > 0;
+    const target = [
+      opener,
+      document.querySelector<HTMLElement>(".chat-shell .panel-reveal"),
+      document.querySelector<HTMLElement>(
+        '.chat-shell .chat-rail [aria-label="App menu"]',
+      ),
+    ].find(usable);
+    target?.focus();
+  }, [providerOpen]);
   function openSettings(section: SettingsSection) {
     if (settingsWindow) {
       chooseSection(section);
@@ -355,8 +390,10 @@ export function ConversationScreen({
     if (docked || !providerOpen) return;
     panelClose.current?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !settingsDialog.current?.open)
+      if (event.key === "Escape" && !settingsDialog.current?.open) {
+        restorePanelFocus.current = true;
         setProviderOpen(false);
+      }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -668,7 +705,7 @@ export function ConversationScreen({
             title="Chat"
           >
             <span className="rail-icon">
-              <ChatIcon />
+              <ChatIcon {...RAIL_GLYPH} />
             </span>
           </button>
           <button
@@ -678,7 +715,7 @@ export function ConversationScreen({
             onClick={() => filterInput.current?.focus()}
           >
             <span className="rail-icon">
-              <SearchIcon />
+              <SearchIcon {...RAIL_GLYPH} />
             </span>
           </button>
           {UNAVAILABLE_DESTINATIONS.map(({ label, Icon }) => (
@@ -691,7 +728,7 @@ export function ConversationScreen({
               onClick={(event) => event.preventDefault()}
             >
               <span className="rail-icon">
-                <Icon />
+                <Icon {...RAIL_GLYPH} />
               </span>
             </button>
           ))}
@@ -702,7 +739,7 @@ export function ConversationScreen({
           triggerClassName="rail-button"
           trigger={
             <span className="rail-icon">
-              <MenuIcon />
+              <MenuIcon {...RAIL_GLYPH} />
             </span>
           }
         >
@@ -926,6 +963,12 @@ export function ConversationScreen({
         className="conversation-main"
         aria-label={conversation?.title ?? "Conversation"}
       >
+        {window.vesperDesktop && !quick && (
+          // Native Mac content toolbar: window drag space only. The
+          // reference's Invite control is omitted because sharing is
+          // unsupported; no title or model is shown here.
+          <div className="main-toolbar" />
+        )}
         {!quick && !panelVisible && (
           <button
             type="button"
@@ -967,7 +1010,7 @@ export function ConversationScreen({
         <div
           className="agent-scrim"
           aria-hidden="true"
-          onClick={() => setProviderOpen(false)}
+          onClick={closeOverlayPanel}
         />
       )}
       <aside
@@ -986,8 +1029,20 @@ export function ConversationScreen({
           <CloseIcon size={20} />
         </button>
         <div className="agent-identity">
-          <span className="agent-avatar">
-            <VesperAvatar size={100} />
+          <span className="agent-avatar-wrap">
+            <span className="agent-avatar">
+              <VesperAvatar size={100} />
+            </span>
+            <button
+              type="button"
+              className="agent-avatar-edit"
+              aria-disabled="true"
+              aria-label="Edit avatar, not available yet"
+              title="Avatar editing isn’t available yet"
+              onClick={(event) => event.preventDefault()}
+            >
+              <PencilIcon size={16} />
+            </button>
           </span>
           <h2>Vesper</h2>
           <p className={"agent-status " + connectionState} role="status">

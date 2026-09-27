@@ -68,6 +68,28 @@
 .agent-avatar .vesper-avatar {
   display: block;
 }
+.agent-avatar-wrap {
+  position: relative;
+  display: block;
+  width: 100px;
+  height: 100px;
+}
+/* Edit badge sits on the lower-right rim, ringed in the panel colour.
+   Editing is unsupported, so it is shown disabled. */
+.chat-shell .agent-avatar-edit {
+  position: absolute;
+  left: 66px;
+  top: 66px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--v-surface);
+  box-shadow: 0 0 0 3px var(--v-bg);
+  color: var(--v-tertiary);
+  cursor: default;
+}
 .agent-identity h2 {
   margin: 6px 0 0;
   font: 600 22px/30px var(--v-font);
@@ -219,18 +241,18 @@
 :root[data-appearance="dark"]
   .chat-shell
   :is(.settings-dialog, .settings-window) {
-  --settings-sidebar: rgb(30, 30, 32);
-  --settings-content: rgb(38, 38, 40);
-  --settings-card: rgb(52, 52, 54);
+  --settings-sidebar: rgb(27, 27, 29);
+  --settings-content: rgb(24, 24, 24);
+  --settings-card: rgb(44, 44, 46);
   --settings-divider: rgba(255, 255, 255, 0.1);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-appearance="light"])
     .chat-shell
     :is(.settings-dialog, .settings-window) {
-    --settings-sidebar: rgb(30, 30, 32);
-    --settings-content: rgb(38, 38, 40);
-    --settings-card: rgb(52, 52, 54);
+    --settings-sidebar: rgb(27, 27, 29);
+    --settings-content: rgb(24, 24, 24);
+    --settings-card: rgb(44, 44, 46);
     --settings-divider: rgba(255, 255, 255, 0.1);
   }
 }
@@ -241,8 +263,10 @@
   grid-template-columns: 225px minmax(0, 1fr);
   border-radius: 12px;
   background: var(--settings-content);
-  border: 1px solid var(--v-separator);
-  box-shadow: var(--v-shadow);
+  /* Outline, not border, so the 225px sidebar starts at the surface edge. */
+  box-shadow:
+    0 0 0 1px var(--v-separator),
+    var(--v-shadow);
   overflow: hidden;
 }
 /* Native settings window: the interior is the whole page, framed by the
@@ -254,7 +278,6 @@
   height: 100%;
 }
 .settings-window .settings-surface {
-  border: 0;
   border-radius: 0;
   box-shadow: none;
 }
@@ -301,13 +324,18 @@
   flex-direction: column;
   min-height: 0;
 }
-.settings-header {
+/* Native: title text top ≈20px, left 24px; first card top ≈66px. */
+.chat-shell .settings-header {
   flex: none;
-  padding: 16px 56px 0 24px;
+  height: auto;
+  margin: 0;
+  border: 0;
+  padding: 15px 56px 0 24px;
 }
 .settings-header h3 {
   margin: 0;
   font: 700 20px/30px var(--v-font);
+  letter-spacing: 0;
 }
 .settings-header form {
   position: absolute;
@@ -418,7 +446,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 16px 32px 32px;
+  padding: 20px 24px 24px;
   font-size: 14px;
   line-height: 20px;
 }
@@ -439,7 +467,7 @@
     width: auto;
     flex: none;
   }
-  .settings-header {
+  .chat-shell .settings-header {
     padding: 12px 20px 0;
   }
   .settings-header form {
