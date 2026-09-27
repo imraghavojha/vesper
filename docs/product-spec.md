@@ -12,7 +12,7 @@ Interchangeable agent harnesses are a core feature. The composer and schedule ed
 - Runs start from a user request, an enabled schedule, or an event trigger the user explicitly configured. Transport keepalives and deterministic sync are not model runs.
 - Every run shows its cause, account, status, outcome, and relevant approval. Failure and uncertainty must remain visible.
 - The browser and secure login flow are first-class product features. A demo chat shell without these is not a working Vesper.
-- Credential capture and filling use trusted app code and OS-encrypted storage. Secrets stay out of chat, prompts, model-visible tool output, screenshots, analytics and review artifacts. Use a shared vault accessible from both clients, with tested host and worker access controls.
+- Credential capture and filling use trusted app code and the application-encrypted vault on the shared host. Secrets stay out of chat, prompts, model-visible tool output, screenshots, analytics and review artifacts. Both clients use the same vault, with tested host and worker access controls.
 - Multiple accounts are separate identities. Every write names the destination account and calendar/mailbox.
 - Desktop and mobile share meaning and state. They need not force identical components across DOM and native rendering.
 

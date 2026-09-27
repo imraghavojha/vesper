@@ -17,4 +17,6 @@ This repository currently contains product research and development setup. There
 
 Start with `HANDOFF.md`. Run `node scripts/check-repository.mjs` to check the planning repository. Application tests will be introduced with the first implementation issues.
 
+After editing `docs/backlog.json`, run `node scripts/backlog-document.mjs` to regenerate the readable backlog, then rerun the repository check.
+
 Vesper uses original branding and assets. It is independent of Meta and Muse. The target is close visual and behavioral parity, with explicit differences in scheduling, providers, and feed recommendations.
