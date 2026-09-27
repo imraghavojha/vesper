@@ -6,6 +6,14 @@ This document supersedes any overly broad reading of the initial technology shor
 
 ## Recommended ownership boundaries
 
+### Direct evidence from Muse
+
+Meta's [September 2026 engineering write-up](https://security.muse.ai/) describes a dedicated Linux VM, an unprivileged runtime cell, separate credential and connector services, a permission authority called Sentinel, and durable Postgres state. It inserts real API secrets at the network boundary using surrogate credentials. Its external browser broker exposes accessibility snapshots, prohibits agent JavaScript/devtools access, and pauses agent control during credential filling and user takeover. These details support Vesper's separation of execution, permissions and secrets; they do not prove a local Electron app alone offers equivalent isolation.
+
+Meta's [design account](https://introducing.muse.ai/) explains persistent main chat, side chats, interruptible work, editable memory, deterministic approval UI and artifacts. Vesper preserves those interaction goals while intentionally changing the proactivity policy.
+
+Vesper design judgment: offer a local host first with an enforced execution sandbox, and preserve a compatible self-hosted Linux runner mode for unattended availability and stronger separation. The host can stay reachable without waking an LLM. Do not promise Muse-equivalent isolation until broker and sandbox escape tests pass. Do not attempt to recreate Meta's classifier ensemble or kernel taint tracking as a prerequisite for the initial product; use explicit constrained capabilities and truthful limits.
+
 ```mermaid
 flowchart TD
   Mac[React UI in Electron] --> Client[Shared client state and typed protocol]
@@ -114,6 +122,10 @@ Inspected Stagehand commit `70f4e91f1983677c1e8ca9a86f0b738f828d059a`, MIT. Its 
 Use Stagehand only when semantic page recovery/extraction reduces work. Default to the selected harness plus deterministic browser tools, so an action does not silently incur a second model bill. Its [cacheService.ts](https://github.com/browserbase/stagehand/blob/70f4e91f1983677c1e8ca9a86f0b738f828d059a/packages/extension/services/cacheService.ts) sends trees to Browserbase cache routes and requires an API key/session. The hosted cache is not a reusable offline cache. Local Vesper caching must be its own account-scoped, secret-free result/action cache.
 
 A CDP attachment to Electron's embedded guest must be proven in the browser spike. General Chromium compatibility is not enough to promise every guest API works. Never expose a public debugging port that lets a model or unrelated site bypass the broker.
+
+### Sandbox Runtime: evaluate a maintained OS boundary
+
+[Anthropic Sandbox Runtime](https://github.com/anthropics/sandbox-runtime), Apache-2.0, offers a library and CLI for process-tree filesystem, network and IPC restrictions using native OS mechanisms. It is explicitly a research preview. It is a candidate dependency for Vesper's untrusted command workers, rather than inventing platform-specific sandbox rules from scratch. Its read defaults are permissive unless configured; Vesper must restrict vault/profile paths and broker/debug sockets explicitly. Validate whether each harness can run within the chosen boundary without breaking supported login. Domain allowlists alone do not enforce connector method/account approval or block data leakage to every allowed host. This complements the broker; it does not replace it.
 
 ### Min: password form detection, not its trust model
 

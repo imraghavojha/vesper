@@ -70,3 +70,5 @@ These are Muse catalog entries, not verified reusable integrations. Prioritize t
 ## Remaining evidence
 
 Need direct Android app inspection, exact animation recordings, full expanded long-thread text, active browser takeover and navigation controls, pending approval state, search result behavior, and less common dialogs. Do not mark pixel/motion parity complete until this evidence exists. Settings Help/Legal and identity document contents need targeted inspection, without copying personal memory.
+
+After native control timed out, the public Muse web entry was inspected as a fallback. It reached a sign-in/account-creation screen, not the existing conversation. No new Meta account was created. The page linked to Meta's design and security articles, which were read and added to the architecture research.
