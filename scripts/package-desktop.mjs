@@ -37,6 +37,11 @@ try {
     arch: process.arch,
     electronVersion: manifest.devDependencies.electron,
     asar: true,
+    extraResource: [join(root, "dist/native")],
+    extendInfo: {
+      NSMicrophoneUsageDescription:
+        "Vesper records your microphone only when you start voice input, transcribes on this Mac, and keeps the text as an unsent draft.",
+    },
     prune: false,
     overwrite: true,
   });

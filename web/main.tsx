@@ -16,6 +16,11 @@ import type { AppRouter } from "../server/router.js";
 import { normalizeHost, type Connection } from "../shared/connection.js";
 import "./style.css";
 import type { Draft } from "../shared/sync.js";
+import type {
+  QuickChatStatus,
+  SpeechCommand,
+  SpeechEvent,
+} from "../shared/desktop.js";
 import { ConversationScreen } from "./chat.js";
 
 const STORAGE_KEY = "vesper.connection.v1";
@@ -34,12 +39,44 @@ declare global {
       loadDraft(
         workspaceId: string,
         conversationId: string,
-      ): Promise<Draft | null>;
+      ): Promise<{ draft: Draft | null; revision: number }>;
       saveDraft(
         workspaceId: string,
         conversationId: string,
         draft: Draft | null,
+        revision: number,
+      ): Promise<{ ok: boolean; revision: number }>;
+      onDraftChanged(
+        callback: (scope: {
+          workspaceId: string;
+          conversationId: string;
+          revision: number;
+        }) => void,
+      ): () => void;
+      quickChatStatus(): Promise<QuickChatStatus>;
+      showQuickChat(): Promise<void>;
+      hideQuickChat(): Promise<void>;
+      showMainWindow(): Promise<void>;
+      setQuickShortcut(accelerator: string): Promise<QuickChatStatus>;
+      onQuickStatus(callback: (status: QuickChatStatus) => void): () => void;
+      onQuickFocus(callback: () => void): () => void;
+      activeConversation(): Promise<{
+        workspaceId: string;
+        conversationId: string;
+      } | null>;
+      setActiveConversation(
+        workspaceId: string,
+        conversationId: string,
       ): Promise<void>;
+      onActiveConversation(
+        callback: (scope: {
+          workspaceId: string;
+          conversationId: string;
+        }) => void,
+      ): () => void;
+      speechCommand(command: SpeechCommand): Promise<void>;
+      cancelSpeech(): Promise<void>;
+      onSpeechEvent(callback: (event: SpeechEvent) => void): () => void;
       loadConnection(): Promise<
         SavedConnection | null | { error: "restore-local-workspace" }
       >;
@@ -51,7 +88,7 @@ declare global {
         callback: (status: LocalHostStatus) => void,
       ): () => void;
       onConnectionChanged(
-        callback: (connection: SavedConnection) => void,
+        callback: (connection: SavedConnection | null) => void,
       ): () => void;
     };
   }

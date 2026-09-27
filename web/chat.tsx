@@ -12,7 +12,9 @@ import {
   messageRequestHash,
   createConversationRequestHash,
 } from "../shared/sync.js";
-import { loadDraft, saveDraft } from "./draft-storage.js";
+import { loadDraft, saveDraft, onDraftChanged } from "./draft-storage.js";
+import { Dictation } from "./dictation.js";
+import { QuickControls } from "./quick-controls.js";
 import { ProviderPanel } from "./provider-panel.js";
 import type { ProviderAvailability } from "../server/providers/contract.js";
 import { askRequestHash } from "../shared/sync.js";
@@ -33,6 +35,35 @@ export function ConversationScreen({
   onDisconnect: () => void;
 }) {
   const [selected, setSelected] = useState<string>();
+  const quick =
+    !!window.vesperDesktop &&
+    new URLSearchParams(location.search).get("quick") === "1";
+  const selectConversation = useCallback(
+    (id: string) => {
+      setSelected(id);
+      void window.vesperDesktop
+        ?.setActiveConversation(connection.workspaceId, id)
+        .catch(() => {});
+    },
+    [connection.workspaceId],
+  );
+  useEffect(() => {
+    const bridge = window.vesperDesktop;
+    if (!bridge) return;
+    let current = true;
+    void bridge.activeConversation().then((scope) => {
+      if (current && scope?.workspaceId === connection.workspaceId)
+        setSelected(scope.conversationId);
+    });
+    const remove = bridge.onActiveConversation((scope) => {
+      if (scope.workspaceId === connection.workspaceId)
+        setSelected(scope.conversationId);
+    });
+    return () => {
+      current = false;
+      remove();
+    };
+  }, [connection.workspaceId]);
   const sync = useSync(connection, selected, onRevoked);
   const [creationIntent, setCreationIntent] = useState<CreationIntent | null>(
     () => pendingCreations.get(connection.workspaceId) ?? null,
@@ -120,11 +151,11 @@ export function ConversationScreen({
       setCreating(false);
       setEditing(null);
       setTitle("");
-      setSelected(id);
+      selectConversation(id);
       setError("");
       void sync.refresh();
     },
-    [clearCreation, sync.refresh],
+    [clearCreation, sync.refresh, selectConversation],
   );
   const checkCreation = useCallback(async () => {
     const intent = creationRef.current;
@@ -228,7 +259,29 @@ export function ConversationScreen({
     }
   }
   return (
-    <div className="chat-shell">
+    <div className={"chat-shell" + (quick ? " quick-chat-shell" : "")}>
+      {quick && (
+        <header className="quick-header">
+          <strong>Vesper quick chat</strong>
+          <select
+            aria-label="Quick chat conversation"
+            value={activeId ?? ""}
+            onChange={(event) => selectConversation(event.target.value)}
+          >
+            {snapshot?.conversations.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.title}
+              </option>
+            ))}
+          </select>
+          <button onClick={() => void window.vesperDesktop?.showMainWindow()}>
+            Open full window
+          </button>
+          <button onClick={() => void window.vesperDesktop?.hideQuickChat()}>
+            Dismiss
+          </button>
+        </header>
+      )}
       <nav className="chat-rail" aria-label="Navigation">
         <span className="chat-brand" aria-label="Vesper">
           v
@@ -269,7 +322,7 @@ export function ConversationScreen({
                 item.id === activeId ? "conversation selected" : "conversation"
               }
               onClick={() => {
-                setSelected(item.id);
+                selectConversation(item.id);
                 if (!creationRef.current) {
                   setCreating(false);
                   setEditing(null);
@@ -507,6 +560,7 @@ export function ConversationScreen({
           </p>
         </div>
         <button onClick={onWorkspace}>Workspace and devices</button>
+        <QuickControls />
       </aside>
     </div>
   );
@@ -607,12 +661,17 @@ function ConversationBody({
       list.current.scrollTop = list.current.scrollHeight;
   }, [messages]);
   const persist = useCallback(
-    (next: Draft) => {
+    (next: Draft, resolveConflict = false) => {
       const revision = ++saveRevision.current;
       draftRef.current = next;
       setDraft(next);
       setSavedState("Saving draft…");
-      const operation = saveDraft(workspaceId, conversationId, next);
+      const operation = saveDraft(
+        workspaceId,
+        conversationId,
+        next,
+        resolveConflict,
+      );
       queue.current = operation;
       void operation.then(
         () => {
@@ -652,6 +711,67 @@ function ConversationBody({
     },
     [persist],
   );
+  useEffect(
+    () =>
+      onDraftChanged(workspaceId, conversationId, () => {
+        void loadDraft(workspaceId, conversationId)
+          .then(({ draft: next, saved }) => {
+            if (!mounted.current) return;
+            draftRef.current = next;
+            setDraft(next);
+            setSavedState(
+              saved
+                ? next.text || next.pending
+                  ? "Draft saved on this Mac"
+                  : "No unsent draft"
+                : "Draft not saved",
+            );
+            setDraftError(
+              saved
+                ? ""
+                : "Another window changed this draft. Your text is kept here. Retry saving to replace the shared draft with this text.",
+            );
+          })
+          .catch(() => {
+            if (mounted.current) {
+              setDraftError(
+                "The shared draft could not be opened. Your text stays in this window.",
+              );
+              setSavedState("Draft not saved");
+            }
+          });
+      }),
+    [workspaceId, conversationId],
+  );
+  useEffect(() => {
+    const bridge = window.vesperDesktop;
+    if (
+      !bridge ||
+      !ready ||
+      new URLSearchParams(location.search).get("quick") !== "1"
+    )
+      return;
+    let current = true;
+    const focus = () => {
+      void bridge
+        .quickChatStatus()
+        .then((status) => {
+          if (current && status.visible)
+            document
+              .querySelector<HTMLTextAreaElement>(
+                'textarea[aria-label="Message"]',
+              )
+              ?.focus();
+        })
+        .catch(() => {});
+    };
+    const remove = bridge.onQuickFocus(focus);
+    focus();
+    return () => {
+      current = false;
+      remove();
+    };
+  }, [ready]);
   const checkReceipt = useCallback(async () => {
     const pending = draftRef.current.pending;
     if (!pending || !sync.online) return;
@@ -865,7 +985,9 @@ function ConversationBody({
             <p>{draftError || sendError}</p>
             {draftError && ready && (
               <button
-                onClick={() => void persist(draftRef.current).catch(() => {})}
+                onClick={() =>
+                  void persist(draftRef.current, true).catch(() => {})
+                }
               >
                 Retry saving draft
               </button>
@@ -954,6 +1076,16 @@ function ConversationBody({
               : "Messages are saved. No provider is connected."}
           </span>
         </div>
+        <Dictation
+          disabled={!ready || !!draftError || sync.revoked}
+          onInsert={async (text) => {
+            const current = draftRef.current;
+            const next = current.text ? current.text + "\n" + text : text;
+            if (next.length > 10000)
+              throw new Error("Transcript exceeds draft limit.");
+            await persist({ ...current, text: next }).catch(() => {});
+          }}
+        />
       </div>
     </>
   );

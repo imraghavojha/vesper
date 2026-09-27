@@ -7,9 +7,25 @@ type Cell = {
   revision: number;
   acknowledged: number;
   tail: Promise<void>;
+  remoteRevision?: number;
+  notifiedRevision?: number;
+  conflicted?: boolean;
 };
 const cells = new Map<string, Cell>();
+const listeners = new Map<string, Set<() => void>>();
+let subscribed = false;
+function subscribeDesktop() {
+  if (subscribed || !window.vesperDesktop) return;
+  subscribed = true;
+  window.vesperDesktop.onDraftChanged((scope) => {
+    const name = prefix + scope.workspaceId + ":" + scope.conversationId;
+    const current = cells.get(name);
+    if (current) current.notifiedRevision = scope.revision;
+    for (const callback of listeners.get(name) ?? []) callback();
+  });
+}
 function key(workspaceId: string, conversationId: string) {
+  subscribeDesktop();
   if (!uuid.test(workspaceId) || !uuid.test(conversationId))
     throw new Error("Invalid draft scope.");
   return prefix + workspaceId + ":" + conversationId;
@@ -120,10 +136,17 @@ export async function loadDraft(
     await tail.catch(() => {});
     if (tail !== state.tail || revision !== state.revision) continue;
     let stored: Draft;
+    let remoteRevision: number | undefined;
     try {
-      const value = window.vesperDesktop
-        ? await window.vesperDesktop.loadDraft(workspaceId, conversationId)
-        : JSON.parse(sessionStorage.getItem(name) ?? "null");
+      let value;
+      if (window.vesperDesktop) {
+        const result = await window.vesperDesktop.loadDraft(
+          workspaceId,
+          conversationId,
+        );
+        value = result.draft;
+        remoteRevision = result.revision;
+      } else value = JSON.parse(sessionStorage.getItem(name) ?? "null");
       stored = value === null ? { text: "", pending: null } : validate(value);
     } catch (error) {
       if (tail !== state.tail || revision !== state.revision) continue;
@@ -131,6 +154,18 @@ export async function loadDraft(
       throw error;
     }
     if (tail !== state.tail || revision !== state.revision) continue;
+    if (remoteRevision !== undefined) {
+      if (
+        state.remoteRevision !== undefined &&
+        state.remoteRevision !== remoteRevision &&
+        state.notifiedRevision === remoteRevision
+      ) {
+        if (state.acknowledged === revision && !state.conflicted)
+          state.latest = stored;
+        else state.conflicted = true;
+      }
+      state.remoteRevision = remoteRevision;
+    }
     if (!state.latest) state.latest = stored;
     const latest = state.latest;
     const matches =
@@ -142,7 +177,8 @@ export async function loadDraft(
           latest.pending.text === stored.pending.text &&
           sameProvider(latest.pending.provider, stored.pending.provider));
     if (matches) state.acknowledged = revision;
-    return { draft: validate(latest), saved: matches };
+    else if (remoteRevision !== undefined) state.conflicted = true;
+    return { draft: validate(latest), saved: matches && !state.conflicted };
   }
 }
 async function writeDraft(
@@ -153,11 +189,24 @@ async function writeDraft(
 ) {
   const empty = !draft.text && !draft.pending;
   if (window.vesperDesktop) {
-    await window.vesperDesktop.saveDraft(
+    const state = cell(name);
+    if (state.conflicted || state.remoteRevision === undefined)
+      throw new Error(
+        "Draft changed in another window. Review it before retrying.",
+      );
+    const result = await window.vesperDesktop.saveDraft(
       workspaceId,
       conversationId,
       empty ? null : draft,
+      state.remoteRevision,
     );
+    state.remoteRevision = result.revision;
+    if (!result.ok) {
+      state.conflicted = true;
+      throw new Error(
+        "Draft changed in another window. Review it before retrying.",
+      );
+    }
     return;
   }
   if (empty) {
@@ -175,6 +224,7 @@ export function saveDraft(
   workspaceId: string,
   conversationId: string,
   draft: Draft,
+  resolveConflict = false,
 ): Promise<void> {
   const name = key(workspaceId, conversationId);
   const value = validate(draft);
@@ -183,6 +233,9 @@ export function saveDraft(
   state.latest = value;
   const operation = state.tail
     .catch(() => {})
+    .then(() => {
+      if (resolveConflict) state.conflicted = false;
+    })
     .then(() => writeDraft(workspaceId, conversationId, name, value))
     .then(() => {
       state.acknowledged = revision;
@@ -191,4 +244,21 @@ export function saveDraft(
   // Keep failure observable to callers without an unhandled detached rejection.
   void operation.catch(() => {});
   return operation;
+}
+export function onDraftChanged(
+  workspaceId: string,
+  conversationId: string,
+  callback: () => void,
+) {
+  const name = key(workspaceId, conversationId);
+  let group = listeners.get(name);
+  if (!group) {
+    group = new Set();
+    listeners.set(name, group);
+  }
+  group.add(callback);
+  return () => {
+    group.delete(callback);
+    if (!group.size) listeners.delete(name);
+  };
 }

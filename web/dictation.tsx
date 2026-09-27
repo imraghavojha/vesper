@@ -1,0 +1,189 @@
+import { useEffect, useRef, useState } from "react";
+import type { SpeechStatus } from "../shared/desktop.js";
+
+export function Dictation({
+  disabled,
+  onInsert,
+}: {
+  disabled: boolean;
+  onInsert: (text: string) => Promise<void>;
+}) {
+  const bridge = window.vesperDesktop;
+  const [status, setStatus] = useState<SpeechStatus | null>(null);
+  const [phase, setPhase] = useState<
+    "idle" | "starting" | "recording" | "stopping" | "cancelling"
+  >("idle");
+  const [text, setText] = useState("");
+  const [error, setError] = useState("");
+  const current = useRef<{
+    sessionId: string;
+    text: string;
+    cancelled: boolean;
+  } | null>(null);
+  const insert = useRef(onInsert);
+  insert.current = onInsert;
+  useEffect(() => {
+    if (!bridge) return;
+    const remove = bridge.onSpeechEvent((event) => {
+      if (event.type === "status" && event.status) setStatus(event.status);
+      if (event.type === "error")
+        setError(event.message ?? "Voice input is unavailable.");
+      const capture = current.current;
+      if (!capture || event.sessionId !== capture.sessionId) return;
+      if (event.type === "started") setPhase("recording");
+      if (event.type === "transcript" && !capture.cancelled) {
+        capture.text = event.text ?? "";
+        setText(capture.text);
+      }
+      if (event.type === "stopped") {
+        current.current = null;
+        setPhase("idle");
+        setText("");
+        if (
+          !capture.cancelled &&
+          event.final === true &&
+          event.reason !== "cancelled" &&
+          event.reason !== "helper-exited" &&
+          capture.text.trim()
+        )
+          void insert.current(capture.text).catch(() => {
+            setText(capture.text);
+            setError(
+              "This transcript does not fit in the draft. Shorten the draft, then add the transcript below.",
+            );
+          });
+      }
+    });
+    return () => {
+      remove();
+      if (current.current) {
+        current.current.cancelled = true;
+        void bridge.cancelSpeech();
+      }
+    };
+  }, [bridge]);
+  if (!bridge) return null;
+  async function command(
+    operation: "status" | "prepare" | "start" | "stop" | "cancel",
+  ) {
+    if (!bridge) return;
+    setError("");
+    if (operation === "start") {
+      current.current = {
+        sessionId: crypto.randomUUID(),
+        text: "",
+        cancelled: false,
+      };
+      setPhase("starting");
+    }
+    if (operation === "stop") setPhase("stopping");
+    if (operation === "cancel" && current.current) {
+      current.current.cancelled = true;
+      setPhase("cancelling");
+    }
+    try {
+      await bridge.speechCommand({
+        id: crypto.randomUUID(),
+        command: operation,
+        locale: "en-US",
+        ...(["start", "stop", "cancel"].includes(operation) && current.current
+          ? { sessionId: current.current.sessionId }
+          : {}),
+      });
+    } catch {
+      setError(
+        "Voice input could not start or stop. Check availability and any recording in another window.",
+      );
+      if (operation === "start") {
+        current.current = null;
+        setPhase("idle");
+      }
+    }
+  }
+  return (
+    <section className="dictation" aria-label="Voice input">
+      {phase === "idle" ? (
+        <>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => void command("status")}
+          >
+            Check voice
+          </button>
+          {status?.available && status.assets !== "ready" && (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => void command("prepare")}
+            >
+              Prepare on-device voice
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={
+              disabled || !status?.available || status.assets !== "ready"
+            }
+            onClick={() => void command("start")}
+          >
+            Record voice
+          </button>
+          <span>
+            {status
+              ? status.available
+                ? `On-device · ${status.assets} · microphone ${status.microphone}`
+                : "On-device speech is unavailable on this Mac."
+              : "Voice creates a private draft. It never sends automatically."}
+          </span>
+        </>
+      ) : (
+        <>
+          <span role="status">
+            {phase === "recording"
+              ? "Microphone recording"
+              : phase === "starting"
+                ? "Starting microphone…"
+                : phase === "stopping"
+                  ? "Stopping and finalizing…"
+                  : "Cancelling microphone…"}
+          </span>
+          <button
+            type="button"
+            disabled={phase !== "recording"}
+            onClick={() => void command("stop")}
+          >
+            Stop and use transcript
+          </button>
+          <button
+            type="button"
+            disabled={phase === "cancelling"}
+            onClick={() => void command("cancel")}
+          >
+            Cancel recording
+          </button>
+        </>
+      )}
+      {text && <p className="dictation-preview">{text}</p>}
+      {phase === "idle" && text && (
+        <button
+          type="button"
+          onClick={() =>
+            void insert
+              .current(text)
+              .then(() => {
+                setText("");
+                setError("");
+              })
+              .catch(() =>
+                setError("The transcript still does not fit in this draft."),
+              )
+          }
+        >
+          Add transcript to draft
+        </button>
+      )}
+      {error && <p role="alert">{error}</p>}
+    </section>
+  );
+}

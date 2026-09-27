@@ -17,31 +17,32 @@
     "check": "node scripts/check-repository.mjs && npm run typecheck && npm run lint && npm run check:desktop && npm run build",
     "pairing-code": "tsx server/pairing.ts",
     "format": "prettier --write server shared web desktop",
-    "check:desktop": "node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/local-host.cjs && node --check scripts/package-desktop.mjs && node --check desktop/drafts.cjs",
-    "package:mac": "npm run check && node scripts/package-desktop.mjs"
+    "check:desktop": "node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/local-host.cjs && node --check desktop/drafts.cjs && node --check desktop/draft-coordinator.cjs && node --check desktop/speech.cjs && node --check desktop/quick-chat.cjs && node --check scripts/package-desktop.mjs && node --check scripts/build-native.mjs",
+    "build:native": "node scripts/build-native.mjs",
+    "package:mac": "npm run check && npm run build:native && node scripts/package-desktop.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.283",
     "@tanstack/react-query": "5.104.0",
     "@trpc/client": "11.19.0",
     "@trpc/server": "11.19.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "zod": "4.6.5",
     "ws": "8.22.0",
-    "@anthropic-ai/claude-agent-sdk": "0.3.283"
+    "zod": "4.6.5"
   },
   "devDependencies": {
+    "@electron/packager": "20.3.0",
     "@types/node": "24.19.0",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "@types/ws": "8.18.1",
     "electron": "44.4.5",
     "eslint": "10.11.0",
     "prettier": "3.9.9",
     "tsx": "4.23.15",
     "typescript": "6.0.3",
     "typescript-eslint": "8.70.1",
-    "vite": "8.3.1",
-    "@electron/packager": "20.3.0",
-    "@types/ws": "8.18.1"
+    "vite": "8.3.1"
   }
 }

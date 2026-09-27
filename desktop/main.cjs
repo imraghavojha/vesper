@@ -15,6 +15,9 @@ const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { createLocalHost } = require("./local-host.cjs");
 const { createDraftStore } = require("./drafts.cjs");
+const { createDraftCoordinator } = require("./draft-coordinator.cjs");
+const { createSpeechController } = require("./speech.cjs");
+const { createQuickChat } = require("./quick-chat.cjs");
 
 app.setName("Vesper");
 const dataDirectory = path.resolve(
@@ -49,6 +52,18 @@ const windows = new Set();
 const drafts = createDraftStore({
   directory: path.join(dataDirectory, "drafts"),
   safeStorage,
+});
+const draftCoordinator = createDraftCoordinator(drafts);
+let mainWindow = null;
+let quickChat = null;
+let activeConversation = null;
+const speech = createSpeechController({
+  executablePath: app.isPackaged
+    ? path.join(process.resourcesPath, "native", "speech-bridge")
+    : path.resolve(__dirname, "../dist/native/speech-bridge"),
+  onEvent(owner, value) {
+    if (!owner.isDestroyed()) owner.send("vesper:speech:event", value);
+  },
 });
 let storedConnection = null;
 let quitting = false;
@@ -259,15 +274,95 @@ function installBridge() {
   }
   ipcMain.handle("vesper:drafts:load", (event, workspaceId, conversationId) => {
     draftScope(event, workspaceId, conversationId);
-    return drafts.load(workspaceId, conversationId);
+    return draftCoordinator.load(workspaceId, conversationId);
   });
   ipcMain.handle(
     "vesper:drafts:save",
-    (event, workspaceId, conversationId, draft) => {
+    (event, workspaceId, conversationId, draft, expectedRevision) => {
       draftScope(event, workspaceId, conversationId);
-      drafts.save(workspaceId, conversationId, draft);
+      const result = draftCoordinator.save(
+        workspaceId,
+        conversationId,
+        draft,
+        expectedRevision,
+      );
+      if (result.ok)
+        for (const win of windows)
+          if (!win.isDestroyed() && win.webContents !== event.sender)
+            win.webContents.send("vesper:drafts:changed", {
+              workspaceId,
+              conversationId,
+              revision: result.revision,
+            });
+      return result;
     },
   );
+  ipcMain.handle("vesper:quick:status", (event) => {
+    requireTrustedCaller(event);
+    return quickChat.status();
+  });
+  ipcMain.handle("vesper:quick:show", (event) => {
+    requireTrustedCaller(event);
+    return quickChat.show();
+  });
+  ipcMain.handle("vesper:quick:hide", (event) => {
+    requireTrustedCaller(event);
+    return quickChat.hide();
+  });
+  ipcMain.handle("vesper:quick:shortcut", (event, accelerator) => {
+    requireTrustedCaller(event);
+    return quickChat.setShortcut(accelerator);
+  });
+  ipcMain.handle("vesper:main:show", (event) => {
+    requireTrustedCaller(event);
+    showMain();
+  });
+  ipcMain.handle("vesper:conversation:get", (event) => {
+    requireTrustedCaller(event);
+    return activeConversation?.workspaceId === storedConnection?.workspaceId
+      ? activeConversation
+      : null;
+  });
+  ipcMain.handle(
+    "vesper:conversation:set",
+    (event, workspaceId, conversationId) => {
+      draftScope(event, workspaceId, conversationId);
+      if (
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          conversationId,
+        )
+      )
+        throw new Error("Invalid conversation.");
+      if (
+        activeConversation?.workspaceId === workspaceId &&
+        activeConversation?.conversationId === conversationId
+      )
+        return;
+      activeConversation = { workspaceId, conversationId };
+      for (const win of windows)
+        if (!win.isDestroyed() && win.webContents !== event.sender)
+          win.webContents.send(
+            "vesper:conversation:changed",
+            activeConversation,
+          );
+    },
+  );
+  ipcMain.handle("vesper:speech:command", (event, command) => {
+    requireTrustedCaller(event);
+    if (!storedConnection)
+      throw new Error("Open a workspace before dictation.");
+    const owner = BrowserWindow.fromWebContents(event.sender);
+    if (
+      command?.command === "start" &&
+      (owner.isDestroyed() || !owner.isVisible() || owner.isMinimized())
+    )
+      throw new Error("Open this window before starting voice input.");
+    speech.send(command, event.sender);
+  });
+  ipcMain.handle("vesper:speech:cancel", (event) => {
+    requireTrustedCaller(event);
+    return speech.cancelOwner(event.sender);
+  });
   ipcMain.handle("vesper:connection:load", async (event) => {
     requireTrustedCaller(event);
     try {
@@ -295,12 +390,17 @@ function installBridge() {
   });
   ipcMain.handle("vesper:connection:save", async (event, value) => {
     requireTrustedCaller(event);
+    await Promise.all(
+      [...windows].map((win) => speech.cancelOwner(win.webContents)),
+    );
     try {
       writeConnection(value);
     } catch {
       throw new Error("Cannot save this device's connection securely.");
     }
     if (value?.mode !== "local") await localHost.stop();
+    activeConversation = null;
+    broadcast("vesper:connection:changed", storedConnection);
   });
   ipcMain.handle("vesper:local:restart", async (event) => {
     requireTrustedCaller(event);
@@ -409,13 +509,15 @@ app.on("web-contents-created", (_event, contents) => {
     if (!trustedUrl(event.url)) event.preventDefault();
   });
 });
-function createWindow() {
+function createWindow(quick = false) {
   const win = new BrowserWindow({
-    width: 1130,
-    height: 780,
-    minWidth: 900,
-    minHeight: 650,
-    title: "Vesper",
+    width: quick ? 600 : 1130,
+    height: quick ? 600 : 780,
+    minWidth: quick ? 380 : 900,
+    minHeight: quick ? 360 : 650,
+    show: !quick,
+    alwaysOnTop: quick,
+    title: quick ? "Vesper Quick Chat" : "Vesper",
     backgroundColor: "#191919",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
@@ -427,14 +529,34 @@ function createWindow() {
     },
   });
   windows.add(win);
-  win.on("closed", () => windows.delete(win));
-  win.loadURL(RENDERER_IDENTITY + "/").catch(() => {
+  const contents = win.webContents;
+  win.on("closed", () => {
+    windows.delete(win);
+    if (mainWindow === win) mainWindow = null;
+    void speech.cancelOwner(contents);
+  });
+  win.on("hide", () => {
+    void speech.cancelOwner(win.webContents);
+  });
+  win.on("minimize", () => {
+    void speech.cancelOwner(contents);
+  });
+  win.webContents.on("render-process-gone", () => {
+    void speech.cancelOwner(win.webContents);
+  });
+  win.loadURL(RENDERER_IDENTITY + (quick ? "/?quick=1" : "/")).catch(() => {
     dialog.showErrorBox(
       "Vesper",
       "The bundled workspace could not load. Reinstall the app or rebuild it from source.",
     );
   });
   return win;
+}
+function showMain() {
+  if (!mainWindow || mainWindow.isDestroyed()) mainWindow = createWindow();
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
 }
 app.whenReady().then(() => {
   const ses = session.fromPartition(PARTITION);
@@ -481,18 +603,25 @@ app.whenReady().then(() => {
     }
   });
   installBridge();
-  createWindow();
+  quickChat = createQuickChat({
+    createWindow: () => createWindow(true),
+    showMain,
+    dataDirectory,
+    onDismiss: () =>
+      Promise.all(
+        [...windows]
+          .filter((win) => win !== mainWindow)
+          .map((win) => speech.cancelOwner(win.webContents)),
+      ),
+    onStatus: (status) => broadcast("vesper:quick:status", status),
+  });
+  showMain();
   app.on("activate", () => {
-    if (!windows.size) createWindow();
+    showMain();
   });
 });
 app.on("second-instance", () => {
-  const win = [...windows][0];
-  if (win) {
-    if (win.isMinimized()) win.restore();
-    win.show();
-    win.focus();
-  }
+  if (app.isReady()) showMain();
 });
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
@@ -501,5 +630,9 @@ app.on("before-quit", (event) => {
   if (quitting) return;
   event.preventDefault();
   quitting = true;
-  void localHost.stop().finally(() => app.quit());
+  void Promise.allSettled([
+    speech.close(),
+    quickChat?.dispose(),
+    localHost.stop(),
+  ]).finally(() => app.quit());
 });
