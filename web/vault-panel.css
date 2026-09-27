@@ -1,0 +1,260 @@
+/* Secure Store section. Reuses the settings card, row, footnote and pill
+   button language; only the list, form and status details are new. */
+.vault-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.vault-panel .settings-card + .settings-card,
+.vault-block {
+  margin-top: 16px;
+}
+.vault-status {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 10px 0;
+}
+.vault-status small,
+.vault-row__meta,
+.vault-help {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--v-secondary);
+}
+.vault-status__actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.vault-badge {
+  padding: 2px 10px;
+  border-radius: 12px;
+  background: var(--v-hover);
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--v-secondary);
+  white-space: nowrap;
+}
+.vault-badge--ready {
+  color: var(--v-positive);
+}
+.vault-badge--locked,
+.vault-badge--missing-key {
+  color: var(--v-warning);
+}
+.vault-badge--unavailable {
+  color: var(--v-danger);
+}
+.vault-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 24px 0 8px;
+}
+.vault-heading .settings-group-label {
+  margin: 0;
+}
+.vault-empty {
+  margin: 0;
+  padding: 18px;
+  color: var(--v-secondary);
+}
+.vault-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.vault-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 18px;
+}
+.vault-row + .vault-row {
+  border-top: 1px solid var(--settings-divider);
+}
+.vault-row__main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.vault-row__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.vault-row__meta {
+  overflow-wrap: anywhere;
+}
+.vault-row__origin {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+.vault-row__actions {
+  flex: none;
+  display: flex;
+  gap: 4px;
+}
+.vault-tag {
+  padding: 0 8px;
+  border-radius: 10px;
+  background: var(--v-hover);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 400;
+  color: var(--v-secondary);
+}
+.chat-shell .vault-link {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--v-text);
+}
+.chat-shell .vault-link:hover:not(:disabled) {
+  background: var(--v-hover);
+}
+.chat-shell .vault-link:disabled {
+  opacity: 0.45;
+}
+.chat-shell .vault-link--danger {
+  color: var(--v-danger);
+}
+.panel-error .vault-link {
+  margin-left: 8px;
+}
+.chat-shell .vault-primary {
+  background: var(--v-text);
+  color: var(--v-bg);
+}
+.chat-shell .vault-primary:hover:not(:disabled) {
+  background: var(--v-text);
+  opacity: 0.9;
+}
+.chat-shell .vault-danger {
+  background: var(--v-danger);
+  color: #ffffff;
+}
+.chat-shell .vault-danger:hover:not(:disabled) {
+  background: var(--v-danger);
+  opacity: 0.9;
+}
+.vault-block p,
+.vault-form p {
+  margin: 0 0 12px;
+}
+.vault-form {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+.vault-form label {
+  display: block;
+  margin: 12px 0 6px;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--v-secondary);
+}
+.vault-form input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--v-separator);
+  background: transparent;
+  outline: none;
+  font-size: 14px;
+}
+.vault-form input:focus {
+  border-color: var(--v-focus);
+}
+.vault-form input[readonly] {
+  color: var(--v-secondary);
+}
+.vault-form .vault-help {
+  margin: 6px 0 0;
+}
+.vault-secret {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.vault-secret input {
+  flex: 1;
+}
+.vault-kind {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 17px;
+  background: var(--v-hover);
+}
+.chat-shell .vault-kind button {
+  height: 28px;
+  padding: 0 14px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--v-secondary);
+}
+.chat-shell .vault-kind button[aria-pressed="true"] {
+  background: var(--v-separator);
+  color: var(--v-text);
+}
+.vault-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+.vault-notice,
+.vault-warning {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 20px;
+}
+.vault-notice {
+  background: var(--v-hover);
+}
+.vault-warning {
+  background: color-mix(in srgb, var(--v-warning) 14%, transparent);
+  color: var(--v-warning);
+}
+.vault-form .vault-warning,
+.vault-form .panel-error,
+.vault-confirm .vault-warning,
+.vault-confirm .panel-error {
+  margin: 12px 0 0;
+}
+.chat-shell .vault-details {
+  margin: 20px 0 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--v-secondary);
+}
+.vault-details summary {
+  width: fit-content;
+  border-radius: 8px;
+  font-weight: 500;
+}
+.vault-details summary:hover {
+  color: var(--v-text);
+}
+.vault-details p {
+  margin: 8px 0;
+}
+.vault-details code {
+  overflow-wrap: anywhere;
+}

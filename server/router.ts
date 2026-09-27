@@ -2,14 +2,23 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
 import type { Store, Device } from "./store.js";
 import type { ProviderRuntime } from "./provider-runtime.js";
+import { VaultError } from "./vault/service.js";
+import { VaultCryptoError } from "./vault/crypto.js";
+import { MAX_VAULT_SECRET_BYTES } from "../shared/vault.js";
 export type Context = {
   store: Store;
   device: Device | null;
   providers: ProviderRuntime;
 };
 const t = initTRPC.context<Context>().create({
-  errorFormatter({ shape }) {
-    return { ...shape, data: { ...shape.data, stack: undefined } };
+  errorFormatter({ shape, path, error }) {
+    return {
+      ...shape,
+      ...(path?.startsWith("vault") && error.cause instanceof z.ZodError
+        ? { message: "Invalid secure-store input." }
+        : {}),
+      data: { ...shape.data, stack: undefined },
+    };
   },
 });
 const authenticated = t.procedure.use(({ ctx, next }) => {
@@ -28,7 +37,121 @@ const selection = z
     modelId: z.string().min(1).max(128),
   })
   .strict();
+const recoveryInput = z
+  .object({
+    recoveryPassphrase: z.string().min(12).max(1024),
+  })
+  .strict();
+const entryVersion = z
+  .object({
+    id: z.string().uuid(),
+    expectedRevision: z.number().int().positive(),
+  })
+  .strict();
+function vaultOperation<T>(
+  ctx: Context & { device: Device },
+  operation: () => T,
+): T {
+  // Context authentication may precede input parsing. Recheck revocation at use.
+  ctx.store.assertDeviceActive(ctx.device.id);
+  try {
+    return operation();
+  } catch (error) {
+    if (error instanceof VaultError) {
+      const code =
+        error.code === "CONFLICT"
+          ? "CONFLICT"
+          : error.code === "NOT_FOUND"
+            ? "NOT_FOUND"
+            : error.code === "INVALID_INPUT"
+              ? "BAD_REQUEST"
+              : error.code === "REVOKED" || error.code === "SCOPE_MISMATCH"
+                ? "FORBIDDEN"
+                : "PRECONDITION_FAILED";
+      throw new TRPCError({ code, message: error.message });
+    }
+    if (error instanceof VaultCryptoError)
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Check the recovery passphrase and try again.",
+      });
+    // Storage/crypto diagnostics and supplied secrets never enter an RPC error.
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message:
+        "The vault operation could not be confirmed. Refresh its metadata before retrying.",
+    });
+  }
+}
 export const appRouter = t.router({
+  vaultSnapshot: authenticated.query(({ ctx }) =>
+    vaultOperation(ctx, () => ctx.store.vault.snapshot()),
+  ),
+  vaultInitialize: authenticated
+    .input(recoveryInput)
+    .mutation(({ ctx, input }) =>
+      vaultOperation(ctx, () =>
+        ctx.store.vault.initialize(input.recoveryPassphrase),
+      ),
+    ),
+  vaultPut: authenticated
+    .input(
+      z
+        .object({
+          id: z.string().uuid(),
+          expectedRevision: z.number().int().min(0),
+          kind: z.enum(["password", "token", "oauth"]),
+          label: z.string().trim().min(1).max(80),
+          accountId: z.string().min(1).max(256),
+          origins: z.array(z.string().min(1).max(2048)).min(1).max(8),
+          secret: z
+            .string()
+            .min(1)
+            .max(MAX_VAULT_SECRET_BYTES)
+            .refine(
+              (value) =>
+                Buffer.byteLength(value, "utf8") <= MAX_VAULT_SECRET_BYTES,
+              "Secret is too long.",
+            )
+            .optional(),
+        })
+        .strict(),
+    )
+    .mutation(({ ctx, input }) =>
+      vaultOperation(ctx, () => ctx.store.vault.put(input)),
+    ),
+  vaultRevoke: authenticated
+    .input(entryVersion)
+    .mutation(({ ctx, input }) =>
+      vaultOperation(ctx, () => ctx.store.vault.revoke(input)),
+    ),
+  vaultRemove: authenticated
+    .input(entryVersion)
+    .mutation(({ ctx, input }) =>
+      vaultOperation(ctx, () => ctx.store.vault.remove(input)),
+    ),
+  vaultLock: authenticated.mutation(({ ctx }) =>
+    vaultOperation(ctx, () => ctx.store.vault.lock()),
+  ),
+  vaultUnlock: authenticated.mutation(({ ctx }) =>
+    vaultOperation(ctx, () => ctx.store.vault.unlock()),
+  ),
+  vaultRecover: authenticated
+    .input(recoveryInput)
+    .mutation(({ ctx, input }) =>
+      vaultOperation(ctx, () =>
+        ctx.store.vault.recover(input.recoveryPassphrase),
+      ),
+    ),
+  vaultRotate: authenticated
+    .input(
+      recoveryInput
+        .extend({ expectedRevision: z.number().int().positive() })
+        .strict(),
+    )
+    .mutation(({ ctx, input }) =>
+      vaultOperation(ctx, () => ctx.store.vault.rotate(input)),
+    ),
   providerAvailability: authenticated.query(({ ctx }) =>
     ctx.providers.discover(),
   ),

@@ -23,6 +23,7 @@ import { loadDraft, saveDraft, onDraftChanged } from "./draft-storage.js";
 import { Dictation } from "./dictation.js";
 import { QuickControls } from "./quick-controls.js";
 import { ProviderPanel } from "./provider-panel.js";
+import { VaultPanel } from "./vault-panel.js";
 import type { ProviderAvailability } from "../server/providers/contract.js";
 import { askRequestHash } from "../shared/sync.js";
 import {
@@ -129,12 +130,7 @@ const SETTINGS_SECTIONS: Array<{
     Icon: WalletIcon,
     note: "Wallet isn’t available in Vesper.",
   },
-  {
-    id: "secure",
-    label: "Secure Store",
-    Icon: ApprovalIcon,
-    note: "Secure Store isn’t available in Vesper yet. No credentials are stored for Vesper to use.",
-  },
+  { id: "secure", label: "Secure Store", Icon: ApprovalIcon },
   {
     id: "permissions",
     label: "Permissions",
@@ -172,6 +168,7 @@ const ENTRY_SECTIONS: ReadonlySet<string> = new Set<SettingsEntrySection>([
   "providers",
   "devices",
   "dictation",
+  "secure",
 ]);
 /** Validates an untrusted section name against the native entry sections. */
 function entrySection(value: unknown): SettingsEntrySection | null {
@@ -291,6 +288,9 @@ export function ConversationScreen({
   const panelClose = useRef<HTMLButtonElement>(null);
   const panelVisible = docked ? !panelHidden : providerOpen;
   const settingsDialog = useRef<HTMLDialogElement>(null);
+  // Browser dialog visibility. Every close path (button, Escape, backdrop)
+  // fires `close`, which unmounts the Secure Store panel and its inputs.
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>(
     () =>
       (settingsWindow &&
@@ -381,6 +381,7 @@ export function ConversationScreen({
       chooseSection(section);
       const dialog = settingsDialog.current;
       if (dialog && !dialog.open) dialog.showModal();
+      setSettingsOpen(true);
     };
     const bridge = window.vesperDesktop;
     if (bridge?.showSettings)
@@ -1181,6 +1182,7 @@ export function ConversationScreen({
         windowMode={settingsWindow}
         dialogRef={settingsDialog}
         labelledBy="settings-title"
+        onClose={() => setSettingsOpen(false)}
       >
         <div className="settings-surface">
           <nav className="settings-nav" aria-label="Settings sections">
@@ -1307,6 +1309,17 @@ export function ConversationScreen({
               )}
             </div>
           </div>
+          {settingsSection === "secure" && (settingsWindow || settingsOpen) && (
+            // Mounted only while visible, so typed secrets, passphrases and
+            // refreshes never persist behind a hidden section or closed dialog.
+            <VaultPanel
+              key={connection.workspaceId + ":" + connection.url}
+              api={sync.api}
+              workspaceId={connection.workspaceId}
+              online={sync.online}
+              refreshHint={sync.snapshot?.cursor}
+            />
+          )}
           <div hidden={settingsSection !== "dictation"}>
             <div className="settings-card settings-card--note">
               {window.vesperDesktop
@@ -1380,11 +1393,13 @@ function SettingsFrame({
   windowMode,
   dialogRef,
   labelledBy,
+  onClose,
   children,
 }: {
   windowMode: boolean;
   dialogRef: RefObject<HTMLDialogElement | null>;
   labelledBy: string;
+  onClose: () => void;
   children: ReactNode;
 }) {
   if (windowMode)
@@ -1398,6 +1413,7 @@ function SettingsFrame({
       ref={dialogRef}
       className="settings-dialog"
       aria-labelledby={labelledBy}
+      onClose={onClose}
       onClick={(event) => {
         if (event.target === event.currentTarget) event.currentTarget.close();
       }}
