@@ -54,12 +54,6 @@ const READ_ONLY_FILE_MODE = 0o400;
 const KEY_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/;
-const UNSUPPORTED_DIRECTORY_SYNC = new Set([
-  "EINVAL",
-  "ENOTSUP",
-  "EISDIR",
-  "EBADF",
-]);
 
 /** Reads and validates an existing key ring. A missing file is an error, never an initialization. */
 export function readKeyRing(filePath: string, workspaceId: string): VaultKey[] {
@@ -379,12 +373,8 @@ function syncDirectory(directoryPath: string, directory: Stats): void {
       throw new VaultKeyFileError("permissions");
     assertOwner(stats);
     assertSameEntry(stats, directory);
-    try {
-      fsyncSync(fd);
-    } catch (error) {
-      if (!UNSUPPORTED_DIRECTORY_SYNC.has(errnoCode(error) ?? ""))
-        throw fileError(error);
-    }
+    // Publication is durable only once the directory entry is synced; any failure fails closed.
+    fsCall(() => fsyncSync(fd));
   } finally {
     closeQuietly(fd);
   }

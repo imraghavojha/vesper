@@ -335,6 +335,8 @@ export function createVault(options: VaultOptions) {
             "The host key is missing. Use the recovery passphrase to restore it.",
         };
       if (!keyFile.isFile() || keyFile.isSymbolicLink()) throw unavailable();
+      const key = keyFor(row);
+      key.bytes.fill(0);
       if (row.locked !== 0)
         return {
           state: "locked",
@@ -342,8 +344,6 @@ export function createVault(options: VaultOptions) {
           recoveryAvailable: true,
           message: "The shared vault is locked. Credential use is paused.",
         };
-      const key = keyFor(row);
-      key.bytes.fill(0);
       return {
         state: "ready",
         revision: row.revision,
@@ -388,12 +388,14 @@ export function createVault(options: VaultOptions) {
           .get() as { count: number };
         if (count.count) throw unavailable();
         let ring: VaultKey[];
+        let reused = true;
         try {
           ring = readKeyRing(keyFilePath, workspaceId);
         } catch (error) {
           if (!(error instanceof VaultKeyFileError) || error.code !== "missing")
             throw unavailable();
           ring = [newVaultKey()];
+          reused = false;
           try {
             writeKeyRing(keyFilePath, workspaceId, ring, "create");
           } catch {
@@ -404,6 +406,14 @@ export function createVault(options: VaultOptions) {
         try {
           // Reuse an exclusively published key after interrupted initialization.
           if (ring.length !== 1) throw unavailable();
+          // An earlier publication may have failed its durability barrier.
+          // Re-establish it before committing any ciphertext/recovery metadata.
+          if (reused)
+            try {
+              writeKeyRing(keyFilePath, workspaceId, ring, "replace");
+            } catch {
+              throw unavailable();
+            }
           const key = ring[0]!;
           const now = new Date().toISOString();
           const sealed = sealValue(

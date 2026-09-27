@@ -26,6 +26,8 @@ Missing or invalid keys never cause automatic replacement of an initialized vaul
 
 The host administrator is trusted and can access the raw key. This does not protect against a compromised administrator or host process. The existing chat adapter has tools/MCP disabled, but that is not proof of OS-level filesystem isolation from a compromised provider executable. Standard worker isolation and the action broker remain release gates before general external tool use.
 
+Key publication requires successful file and directory synchronization. A filesystem that cannot provide the directory durability barrier cannot initialize, recover or rotate the vault; these operations fail closed before a database key switch. An existing key is still checked before reporting Locked, so damaged or inaccessible key material remains Unavailable rather than presenting an unusable Unlock action.
+
 ## Recovery and rotation
 
 Initialization asks for a recovery passphrase. A fixed-parameter scrypt derivation wraps a recovery copy of the key with AES-256-GCM. Only that wrapped copy is stored in SQLite. The passphrase is neither saved nor returned. Keep it separately from database backups.
