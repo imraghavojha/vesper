@@ -1,9 +1,12 @@
 {
   "strictness": 2,
   "effort": "base",
-  "autoReview": ["open", "push"],
+  "autoReview": [
+    "open",
+    "push"
+  ],
   "triggerOnDrafts": false,
   "shouldUpdateDescription": false,
   "fixWithAI": false,
-  "instructions": "Read AGENTS.md and the linked Linear acceptance criteria. Focus on correctness, credential isolation, origin/account scoping, stale approvals, durable job recovery, calendar idempotency, provider switching, and zero unsolicited model work. Require meaningful tests for backend changes. Do not mistake this planning repository for an implemented app. Do not demand speculative abstractions or cosmetic rewrites. Flag any secret or personal reference data included in commits."
+  "instructions": "Read AGENTS.md and the linked Linear acceptance criteria. Focus on correctness, credential isolation, origin/account scoping, stale approvals, durable job recovery, calendar idempotency, provider switching, and zero unsolicited model work. Require meaningful actual outcome and recovery evidence for backend changes. For this owner-directed work, the owner explicitly requests temporary E2E harnesses outside the repository and no retained test suite; verify the reported runtime outcomes without treating static CI checks as behavior tests. This repository now contains the initial shared-workspace foundation, not a complete assistant. Do not demand speculative abstractions or cosmetic rewrites. Flag any secret or personal reference data included in commits."
 }

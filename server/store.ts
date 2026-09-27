@@ -6,6 +6,10 @@ import {
   writeFileSync,
   unlinkSync,
   existsSync,
+  renameSync,
+  openSync,
+  closeSync,
+  fsyncSync,
 } from "node:fs";
 import { resolve } from "node:path";
 import { TRPCError } from "@trpc/server";
@@ -77,11 +81,37 @@ export function openStore(directory: string) {
     );
     return { code, expiresAt: new Date(expiresAt).toISOString() };
   }
+  function publishPairingCode(reset = false) {
+    const temporary = resolve(directory, `.pairing-${randomUUID()}.tmp`);
+    let published = false;
+    try {
+      return db
+        .transaction(() => {
+          if (reset) db.prepare("DELETE FROM pairing_codes").run();
+          const { code, expiresAt } = createPairingCode();
+          const descriptor = openSync(temporary, "wx", 0o600);
+          try {
+            writeFileSync(descriptor, code + "\n");
+            fsyncSync(descriptor);
+          } finally {
+            closeSync(descriptor);
+          }
+          // Hold the SQLite write lock through publication so revocation cannot
+          // invalidate this code between insertion and its file becoming visible.
+          renameSync(temporary, codePath);
+          published = true;
+          return { file: codePath, expiresAt };
+        })
+        .immediate();
+    } catch (error) {
+      if (published && existsSync(codePath)) unlinkSync(codePath);
+      throw error;
+    } finally {
+      if (existsSync(temporary)) unlinkSync(temporary);
+    }
+  }
   if (!db.prepare("SELECT id FROM devices WHERE revokedAt IS NULL").get()) {
-    db.prepare("DELETE FROM pairing_codes").run();
-    const { code } = createPairingCode();
-    writeFileSync(codePath, code + "\n", { mode: 0o600 });
-    chmodSync(codePath, 0o600);
+    publishPairingCode(true);
     console.info(
       `First device pairing code is in ${codePath}. It expires in 10 minutes. Restart this host to renew before pairing.`,
     );
@@ -132,6 +162,7 @@ export function openStore(directory: string) {
   return {
     authenticate,
     createPairingCode,
+    publishPairingCode,
     pair(input: { code: string; name: string; platform: string }) {
       const result = pair(input);
       if (existsSync(codePath)) unlinkSync(codePath);
@@ -169,12 +200,16 @@ export function openStore(directory: string) {
     },
     revoke(id: string) {
       db.transaction(() => {
-        db.prepare(
-          "UPDATE devices SET revokedAt = ? WHERE id = ? AND revokedAt IS NULL",
-        ).run(new Date().toISOString(), id);
-        // A revoked device must not regain access through a code it issued earlier.
-        // This single-owner workspace invalidates all unused codes atomically.
-        db.prepare("DELETE FROM pairing_codes").run();
+        const result = db
+          .prepare(
+            "UPDATE devices SET revokedAt = ? WHERE id = ? AND revokedAt IS NULL",
+          )
+          .run(new Date().toISOString(), id);
+        if (result.changes > 0) {
+          // A revoked device must not regain access through a code it issued earlier.
+          // Repeating a completed revocation must preserve codes issued afterwards.
+          db.prepare("DELETE FROM pairing_codes").run();
+        }
       })();
     },
     close() {
