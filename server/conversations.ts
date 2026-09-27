@@ -164,6 +164,9 @@ export function createConversations(
     appendVaultChange(id: string, revision: number) {
       return appendChange("vault", id, revision);
     },
+    appendConnectorChange(id: string, revision: number) {
+      return appendChange("connector", id, revision);
+    },
     changeCursor: cursor,
     sharedSettings: settings,
     syncSnapshot(conversationId?: string) {

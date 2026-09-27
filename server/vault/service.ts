@@ -175,7 +175,7 @@ export function createVault(options: VaultOptions) {
         UPDATE schema_version SET version=4;
       `);
     });
-  else if (schema.version !== 4) throw unavailable();
+  else if (schema.version !== 4 && schema.version !== 5) throw unavailable();
   // IDs are never recycled: an old approved reference must not name a new secret.
   db.exec(`CREATE TABLE IF NOT EXISTS vault_retired_ids (
     id TEXT PRIMARY KEY, retiredAt TEXT NOT NULL

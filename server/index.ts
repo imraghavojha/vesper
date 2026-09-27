@@ -107,6 +107,15 @@ const server = createServer(async (req, res) => {
     res.end(JSON.stringify({ status: "ok", protocolVersion: 1 }));
     return;
   }
+  if (url.pathname === "/oauth/google/callback" && req.method === "GET") {
+    const result = await store.calendar.callback(url).catch(() => ({
+      status: 500,
+      text: "Google sign-in couldn’t be saved. Start again from Vesper.",
+    }));
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.writeHead(result.status).end(result.text);
+    return;
+  }
   if (url.pathname.startsWith("/trpc/")) {
     await handler(req, res);
     return;

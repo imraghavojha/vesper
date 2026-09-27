@@ -1,0 +1,91 @@
+/* Connectors section. Reuses settings cards, labels and pill buttons. */
+.calendar-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.calendar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.calendar-row,
+.calendar-event {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 18px;
+}
+.calendar-event {
+  justify-content: flex-start;
+  padding: 8px 18px;
+}
+.calendar-row + .calendar-row,
+.calendar-day + .calendar-day {
+  border-top: 1px solid var(--settings-divider);
+}
+.calendar-row__main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.calendar-row__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.calendar-row__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.calendar-row__meta,
+.calendar-event__time,
+.calendar-empty {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--v-secondary);
+}
+.calendar-row__actions {
+  flex: none;
+  display: flex;
+  gap: 4px;
+}
+.calendar-event__time {
+  flex: none;
+  width: 112px;
+  font-variant-numeric: tabular-nums;
+}
+.calendar-empty {
+  margin: 0;
+  padding: 18px;
+}
+.calendar-day h5 {
+  margin: 0;
+  padding: 12px 18px 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.calendar-tag {
+  padding: 0 8px;
+  border-radius: 10px;
+  background: var(--v-hover);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 400;
+  color: var(--v-secondary);
+  white-space: nowrap;
+}
+.calendar-tag--connected {
+  color: var(--v-positive);
+}
+.calendar-tag--reconnect {
+  color: var(--v-warning);
+}
+.calendar-tag--error {
+  color: var(--v-danger);
+}

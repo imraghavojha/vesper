@@ -8,6 +8,8 @@ Also read [architecture and concrete reuse](docs/architecture-and-reuse.md). The
 
 ## Current state
 
+- IMR-17 adds read-only Google Calendar: external-browser OAuth with PKCE, multiple accounts, refresh tokens in Secure Store, explicit sync with Google sync tokens, a seven-day agenda with overlap marks, and Reconnect/Disconnect states. See [development](docs/development.md#google-calendar). The host operator supplies the OAuth client file. Calendar writes, Gmail, attachments, drafts, background/scheduled sync and Android remain open IMR-17 acceptance.
+
 - IMR-9 adds the shared host vault foundation: AES-256-GCM credential records, private external key file, passphrase-wrapped recovery, metadata-only client responses, exact origin/account checks, lock/revoke states and recoverable rotation. Secure Store entry bypasses chat and never reads saved values back to clients. See [vault operations](docs/vault.md). OAuth consent, connector dispatch, browser filling/waiting-task resume, worker filesystem isolation and Android acceptance remain open; storing a credential does not prove any external account connection.
 
 - Mac-first delivery now includes the reference-based chat and Settings baseline. Complete view, motion and Android parity remain open; use fresh Muse frames and interaction evidence for later visual changes. Secure Store is the next connector prerequisite, not evidence of a connected account.
@@ -28,7 +30,7 @@ Also read [architecture and concrete reuse](docs/architecture-and-reuse.md). The
 
 ## Next agent
 
-Preserve the working Mac interface, backend, provider runs, shared drafts and trusted IPC. After the vault foundation, prioritize direct Google Calendar authorization and read synchronization. Calendar writes need the exact-operation approval broker first. Direct connectors are primary where available and permitted; SubItUp uses Vesper's browser, this user's university Outlook uses the browser, and other Outlook accounts use direct connectors where permitted. Do not turn every service into a browser-only integration. Claim the corresponding Linear issue before work and use its ID in the branch/PR. Browser filling, waiting-task credential resume and Android still belong to IMR-9's remaining acceptance.
+Preserve the working Mac interface, backend, provider runs, shared drafts and trusted IPC. Google Calendar authorization and read synchronization exist. Calendar writes need the exact-operation approval broker first; build that broker before any external write. Direct connectors are primary where available and permitted; SubItUp uses Vesper's browser, this user's university Outlook uses the browser, and other Outlook accounts use direct connectors where permitted. Do not turn every service into a browser-only integration. Claim the corresponding Linear issue before work and use its ID in the branch/PR. Browser filling, waiting-task credential resume and Android still belong to IMR-9's remaining acceptance.
 
 Do not claim perfect cloning from screenshots alone. Active browser details, Android UI, motion timings and less common dialogs still need evidence. Do not copy Muse's inconsistent month-end scheduling: its chat, goal description and upcoming date disagree.
 

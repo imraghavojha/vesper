@@ -21,7 +21,14 @@ export type Message = {
 export type Settings = { appearance: Appearance; revision: number };
 export type Change = {
   cursor: number;
-  kind: "conversation" | "message" | "settings" | "provider" | "run" | "vault";
+  kind:
+    | "conversation"
+    | "message"
+    | "settings"
+    | "provider"
+    | "run"
+    | "vault"
+    | "connector";
   entityId: string;
   revision: number;
 };

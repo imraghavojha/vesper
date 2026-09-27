@@ -152,6 +152,22 @@ export const appRouter = t.router({
     .mutation(({ ctx, input }) =>
       vaultOperation(ctx, () => ctx.store.vault.rotate(input)),
     ),
+  calendar: authenticated.query(({ ctx }) => ctx.store.calendar.snapshot()),
+  connectGoogle: authenticated
+    .input(z.object({ hostUrl: z.string().url().max(2048) }).strict())
+    .mutation(({ ctx, input }) => ctx.store.calendar.connect(input.hostUrl)),
+  syncGoogle: authenticated
+    .input(z.object({ accountId: z.string().uuid() }).strict())
+    // Starts the sync and returns; its outcome arrives as a change notice.
+    .mutation(({ ctx, input }) => {
+      void ctx.store.calendar.sync(input.accountId).catch(() => {});
+      return ctx.store.calendar.snapshot();
+    }),
+  disconnectGoogle: authenticated
+    .input(z.object({ accountId: z.string().uuid() }).strict())
+    .mutation(({ ctx, input }) =>
+      ctx.store.calendar.disconnect(input.accountId),
+    ),
   providerAvailability: authenticated.query(({ ctx }) =>
     ctx.providers.discover(),
   ),
