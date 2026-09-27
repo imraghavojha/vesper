@@ -8,6 +8,7 @@ function createSpeechController({ executablePath, onEvent }) {
   let buffer = "";
   let active = null;
   const requests = new Map();
+  const pendingWriteFailures = new Set();
   const stoppedWaiters = new Set();
   const emit = (owner, event) => {
     try {
@@ -26,8 +27,8 @@ function createSpeechController({ executablePath, onEvent }) {
         type: "stopped",
         reason: "helper-exited",
       });
-    for (const [id, owner] of requests)
-      emit(owner, {
+    for (const [id, request] of requests)
+      emit(request.owner, {
         id,
         type: "error",
         code: "helper-exited",
@@ -35,6 +36,7 @@ function createSpeechController({ executablePath, onEvent }) {
       });
     active = null;
     requests.clear();
+    pendingWriteFailures.clear();
     for (const done of stoppedWaiters) done();
     stoppedWaiters.clear();
   }
@@ -49,7 +51,7 @@ function createSpeechController({ executablePath, onEvent }) {
     )
       throw new Error("Invalid voice response.");
     const owner =
-      requests.get(value.id) ??
+      requests.get(value.id)?.owner ??
       (active &&
       (active.id === value.id || active.sessionId === value.sessionId)
         ? active.owner
@@ -128,6 +130,8 @@ function createSpeechController({ executablePath, onEvent }) {
       }
     });
     child.stdin.on("error", () => {
+      if (child !== launched) return;
+      for (const fail of [...pendingWriteFailures]) fail();
       try {
         launched.kill("SIGKILL");
       } catch {
@@ -206,20 +210,22 @@ function createSpeechController({ executablePath, onEvent }) {
     }
     if (control) active.controls[command.command] = command.id;
     if (command.command === "cancel") active.cancelRequested = true;
-    requests.set(command.id, owner);
-    try {
-      process.stdin.write(
-        JSON.stringify({
-          id: command.id,
-          command: command.command,
-          ...(command.sessionId ? { sessionId: command.sessionId } : {}),
-          locale: command.locale ?? "en-US",
-        }) + "\n",
-      );
-    } catch {
+    const request = { owner };
+    requests.set(command.id, request);
+    const capture = active;
+    let writeSettled = false;
+    const failWrite = () => {
+      if (writeSettled) return;
+      writeSettled = true;
+      pendingWriteFailures.delete(failWrite);
+      if (child !== process || requests.get(command.id) !== request) return;
+      requests.delete(command.id);
+      if (active !== capture) return;
+      if (control && active?.controls[command.command] === command.id)
+        delete active.controls[command.command];
       if (!process.pid) {
         ended();
-        throw new Error("Voice process did not start.");
+        return;
       }
       if (active)
         emit(active.owner, {
@@ -229,11 +235,39 @@ function createSpeechController({ executablePath, onEvent }) {
           code: "write-failed",
           message: "Voice input status is unconfirmed. Retry Cancel.",
         });
+      else
+        emit(owner, {
+          id: command.id,
+          type: "error",
+          code: "write-failed",
+          message: "Voice command could not be delivered. Try again.",
+        });
       try {
         process.kill("SIGKILL");
       } catch {
         /* Keep the session until a real stop/exit receipt. */
       }
+    };
+    pendingWriteFailures.add(failWrite);
+    try {
+      process.stdin.write(
+        JSON.stringify({
+          id: command.id,
+          command: command.command,
+          ...(command.sessionId ? { sessionId: command.sessionId } : {}),
+          locale: command.locale ?? "en-US",
+        }) + "\n",
+        (error) => {
+          if (error) failWrite();
+          else {
+            writeSettled = true;
+            pendingWriteFailures.delete(failWrite);
+          }
+        },
+      );
+    } catch {
+      failWrite();
+      if (!process.pid) throw new Error("Voice process did not start.");
     }
   }
   function cancelOwner(owner) {
