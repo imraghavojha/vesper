@@ -2,6 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import { transaction } from "./transaction.js";
 import { createConversations } from "./conversations.js";
 import { createVault } from "./vault/service.js";
+import { createGoogleCalendar } from "./google-calendar.js";
 import { EventEmitter } from "node:events";
 import { randomBytes, createHash, randomUUID } from "node:crypto";
 import {
@@ -73,7 +74,7 @@ export function openStore(directory: string, expectedWorkspaceId?: string) {
   const schema = db.prepare("SELECT version FROM schema_version").get() as {
     version: number;
   };
-  if (![1, 2, 3, 4].includes(schema.version))
+  if (![1, 2, 3, 4, 5].includes(schema.version))
     throw new Error(
       "Unsupported database version. Use a compatible Vesper host.",
     );
@@ -103,6 +104,17 @@ export function openStore(directory: string, expectedWorkspaceId?: string) {
     keyFilePath: process.env.VESPER_VAULT_KEY_FILE,
     startLocked: process.env.VESPER_VAULT_START_LOCKED === "1",
     appendChange: conversations.appendVaultChange,
+    notify: () => {
+      updates.emit("changed");
+    },
+  });
+  const calendar = createGoogleCalendar({
+    database: db,
+    vault,
+    clientFile:
+      process.env.VESPER_GOOGLE_CLIENT_FILE ??
+      resolve(directory, "google-oauth-client.json"),
+    appendChange: conversations.appendConnectorChange,
     notify: () => {
       updates.emit("changed");
     },
@@ -196,6 +208,7 @@ export function openStore(directory: string, expectedWorkspaceId?: string) {
   return {
     ...conversations,
     vault,
+    calendar,
     assertDeviceActive(id: string) {
       if (
         !db

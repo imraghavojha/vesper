@@ -390,8 +390,8 @@ function Welcome({
       )}
       <p className="scope-note">
         Chat with Claude using your own account. Dictation uses on-device speech
-        where this Mac supports it. Connectors and scheduled work aren’t
-        available yet.
+        where this Mac supports it. Google Calendar can be read after you
+        connect it. Scheduled work isn’t available yet.
       </p>
     </main>
   );
@@ -538,8 +538,8 @@ function Pair({
         </details>
       </section>
       <p className="scope-note">
-        Conversations and Claude chat are available once connected. Connectors
-        and scheduled work aren’t available yet.
+        Conversations, Claude chat and read-only Google Calendar are available
+        once connected. Scheduled work isn’t available yet.
       </p>
     </main>
   );
@@ -792,8 +792,8 @@ function Workspace({
             </li>
           </ul>
           <p className="muted">
-            Replies run only when you send a message. Connectors and scheduled
-            work aren’t available yet, and nothing runs in the background.
+            Replies run only when you send a message. Calendars sync only when
+            you connect or choose Sync now, and nothing runs in the background.
           </p>
           <div className="small-note">
             {connection.mode === "local"

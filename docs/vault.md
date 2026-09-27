@@ -2,7 +2,7 @@
 
 IMR-9 stores passwords, custom tokens and future connector OAuth data on the workspace's authoritative host. It is separate from the Mac's `safeStorage` files, which protect that device's connection and unsent drafts. A local Mac workspace keeps working while its app and host are running. Independent hosting uses the same vault and permits authorized clients to connect while the Mac is off.
 
-This is a storage and secure-entry slice. Browser filling, OAuth consent and refresh, connector dispatch, waiting-task resume, and Android entry are not implemented by this change. The full [IMR-9 acceptance](https://linear.app/imraghavojha/issue/2175c734-16a1-493d-b0f6-e94b420d686d) remains open for those paths.
+This is a storage and secure-entry slice. Google Calendar (IMR-17) stores its refresh token here as an `oauth` entry; see [development](development.md#google-calendar). Browser filling, other connector dispatch, waiting-task resume, and Android entry are not implemented. The full [IMR-9 acceptance](https://linear.app/imraghavojha/issue/2175c734-16a1-493d-b0f6-e94b420d686d) remains open for those paths.
 
 ## Entry and use
 

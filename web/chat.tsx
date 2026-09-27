@@ -24,6 +24,7 @@ import { Dictation } from "./dictation.js";
 import { QuickControls } from "./quick-controls.js";
 import { ProviderPanel } from "./provider-panel.js";
 import { VaultPanel } from "./vault-panel.js";
+import { CalendarPanel } from "./calendar-panel.js";
 import type { ProviderAvailability } from "../server/providers/contract.js";
 import { askRequestHash } from "../shared/sync.js";
 import {
@@ -105,12 +106,7 @@ const SETTINGS_SECTIONS: Array<{
 }> = [
   { id: "general", label: "General", Icon: SettingsIcon },
   { id: "providers", label: "Providers", Icon: ModelIcon },
-  {
-    id: "connectors",
-    label: "Connectors",
-    Icon: GridIcon,
-    note: "Connectors aren’t available in Vesper yet. No services are connected.",
-  },
+  { id: "connectors", label: "Connectors", Icon: GridIcon },
   {
     id: "computer",
     label: "Computer use",
@@ -1309,6 +1305,15 @@ export function ConversationScreen({
               )}
             </div>
           </div>
+          {settingsSection === "connectors" && (
+            <CalendarPanel
+              key={connection.workspaceId + ":" + connection.url}
+              api={sync.api}
+              online={sync.online}
+              hostUrl={connection.url}
+              refreshHint={sync.snapshot?.cursor}
+            />
+          )}
           {settingsSection === "secure" && (settingsWindow || settingsOpen) && (
             // Mounted only while visible, so typed secrets, passphrases and
             // refreshes never persist behind a hidden section or closed dialog.
