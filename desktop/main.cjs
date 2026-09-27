@@ -229,13 +229,21 @@ function installBridge() {
       if (storedConnection?.mode === "local") {
         const ready = await localHost.start();
         if (ready.workspaceId !== storedConnection.workspaceId)
-          throw new Error("Local workspace identity changed.");
+          throw Object.assign(new Error("Local workspace identity changed."), {
+            code: "LOCAL_WORKSPACE_IDENTITY",
+          });
         writeConnection({ ...storedConnection, url: ready.url });
       }
       return storedConnection;
-    } catch {
+    } catch (error) {
+      if (
+        error?.code === "LOCAL_WORKSPACE_MISSING" ||
+        error?.code === "LOCAL_WORKSPACE_IDENTITY"
+      ) {
+        return { error: "restore-local-workspace" };
+      }
       throw new Error(
-        "Saved connection could not be opened. Check local host status or pair again.",
+        "Saved connection could not be opened. Check device encryption or connection settings.",
       );
     }
   });

@@ -21,6 +21,7 @@ type SavedConnection = Connection & {
   workspaceId: string;
   mode?: "local" | "remote";
 };
+class LocalWorkspaceRestoreError extends Error {}
 type LocalHostStatus = {
   state: "stopped" | "starting" | "running" | "failed";
   message?: string;
@@ -28,7 +29,9 @@ type LocalHostStatus = {
 declare global {
   interface Window {
     vesperDesktop?: {
-      loadConnection(): Promise<SavedConnection | null>;
+      loadConnection(): Promise<
+        SavedConnection | null | { error: "restore-local-workspace" }
+      >;
       saveConnection(value: SavedConnection | null): Promise<void>;
       createLocalWorkspace(): Promise<SavedConnection>;
       localHostStatus(): Promise<LocalHostStatus>;
@@ -45,6 +48,16 @@ async function loadConnection(): Promise<SavedConnection | null> {
   const saved: unknown = window.vesperDesktop
     ? await window.vesperDesktop.loadConnection()
     : JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? "null");
+  if (
+    saved &&
+    typeof saved === "object" &&
+    "error" in saved &&
+    saved.error === "restore-local-workspace"
+  ) {
+    throw new LocalWorkspaceRestoreError(
+      "The saved local workspace is missing or has changed. Restore its data from backup before opening Vesper.",
+    );
+  }
   if (saved === null) return null;
   if (
     !saved ||
@@ -121,10 +134,12 @@ function App() {
       .then((saved) => {
         if (active) setConnection(saved);
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (active)
           setStorageError(
-            "Saved connection could not be opened. Pair this device again.",
+            error instanceof LocalWorkspaceRestoreError
+              ? error.message
+              : "Saved connection could not be opened. Check device encryption or connection settings.",
           );
       })
       .finally(() => {

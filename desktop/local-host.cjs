@@ -333,7 +333,11 @@ function createLocalHost({
                 recoveryMessage ??
                 "The local host could not start. Try again or check local storage.",
             });
-          throw new Error(recoveryMessage ?? "The local host could not start.");
+          const failure = new Error(
+            recoveryMessage ?? "The local host could not start.",
+          );
+          if (recoveryMessage) failure.code = error.code;
+          throw failure;
         }
       })
       .finally(() => {
