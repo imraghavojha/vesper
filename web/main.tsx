@@ -33,7 +33,8 @@ declare global {
         SavedConnection | null | { error: "restore-local-workspace" }
       >;
       saveConnection(value: SavedConnection | null): Promise<void>;
-      createLocalWorkspace(): Promise<SavedConnection>;
+      createLocalWorkspace(): Promise<SavedConnection | null>;
+      restartLocalHost(): Promise<SavedConnection>;
       localHostStatus(): Promise<LocalHostStatus>;
       onLocalHostStatus(
         callback: (status: LocalHostStatus) => void,
@@ -244,7 +245,8 @@ function Welcome({
     setBusy(true);
     setError("");
     try {
-      await onConnect(await window.vesperDesktop!.createLocalWorkspace());
+      const connection = await window.vesperDesktop!.createLocalWorkspace();
+      if (connection) await onConnect(connection);
     } catch {
       setError(
         "The local workspace could not open. Check that storage and device encryption are available, then try again.",
@@ -525,6 +527,25 @@ function Workspace({
       setBusy(false);
     }
   }
+  async function retryConnection() {
+    if (connection.mode !== "local" || !window.vesperDesktop || unauthorized) {
+      await status.refetch();
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const next = await window.vesperDesktop.restartLocalHost();
+      // A changed port arrives through the connection event and starts a new query.
+      if (next.url === connection.url) await status.refetch();
+    } catch {
+      setError(
+        "The local workspace could not restart. Check its status and saved data, then try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <main className="workspace">
       <div className="workspace-top">
@@ -571,7 +592,9 @@ function Workspace({
                 ? "Pair again with a new code from a connected device."
                 : "Changes are disabled. Vesper will reconnect when the host is available. Last received information may be out of date."}
           </p>
-          <button onClick={() => void status.refetch()}>Try again</button>
+          <button disabled={busy} onClick={() => void retryConnection()}>
+            {busy ? "Trying again…" : "Try again"}
+          </button>
           <button className="text-button" onClick={disconnect}>
             Forget this connection
           </button>

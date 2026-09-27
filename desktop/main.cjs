@@ -139,11 +139,32 @@ function readConnection() {
   const saved = JSON.parse(
     safeStorage.decryptString(fs.readFileSync(connectionPath)),
   );
-  if (saved.rendererOrigin !== RENDERER_IDENTITY)
-    throw new Error(
-      "Saved connection belongs to a different renderer. Pair again.",
-    );
-  return validateConnection(saved.connection);
+  const connection = validateConnection(saved.connection);
+  if (saved.rendererOrigin === RENDERER_IDENTITY) return connection;
+  // PR #2 stored the configured HTTP(S) renderer origin. Accept only its
+  // endpoint-bound production format or the exact built-in development origin.
+  const legacy = new URL(saved.rendererOrigin);
+  const isExactOrigin =
+    legacy.origin === saved.rendererOrigin &&
+    !legacy.username &&
+    !legacy.password;
+  const wasLegacyShape =
+    Object.keys(saved.connection).length === 3 &&
+    !Object.hasOwn(saved.connection, "mode");
+  const knownLegacyOrigin =
+    saved.rendererOrigin === connection.url ||
+    saved.rendererOrigin === "http://127.0.0.1:5177";
+  if (
+    !wasLegacyShape ||
+    !isExactOrigin ||
+    !["http:", "https:"].includes(legacy.protocol) ||
+    !knownLegacyOrigin
+  ) {
+    throw new Error("Saved connection belongs to an unrecognized renderer.");
+  }
+  const migrated = { ...connection, mode: "remote" };
+  writeConnection(migrated);
+  return migrated;
 }
 function writeConnection(value) {
   if (value === null) {
@@ -256,11 +277,38 @@ function installBridge() {
     }
     if (value?.mode !== "local") await localHost.stop();
   });
+  ipcMain.handle("vesper:local:restart", async (event) => {
+    requireTrustedCaller(event);
+    if (storedConnection?.mode !== "local")
+      throw new Error(
+        "No saved local connection is available. Open the local workspace explicitly.",
+      );
+    const previous = storedConnection;
+    const ready = await localHost.start();
+    if (ready.workspaceId !== previous.workspaceId)
+      throw new Error(
+        "Local workspace identity changed. Restore its data before reconnecting.",
+      );
+    // Retain the exact credential. A restart never restores revoked access.
+    if (
+      storedConnection?.mode !== "local" ||
+      storedConnection.token !== previous.token ||
+      storedConnection.workspaceId !== previous.workspaceId
+    )
+      throw new Error("The connection changed while restarting.");
+    const connection = { ...previous, url: ready.url };
+    writeConnection(connection);
+    broadcast("vesper:connection:changed", connection);
+    return connection;
+  });
   ipcMain.handle("vesper:local:create", async (event) => {
     requireTrustedCaller(event);
     requireEncryption();
     if (!localConnectionPending) {
       localConnectionPending = (async () => {
+        const reopeningLocalData = fs.existsSync(
+          path.join(dataDirectory, "local-host", "workspace.sqlite"),
+        );
         const ready = await localHost.start();
         if (storedConnection?.mode === "local") {
           if (ready.workspaceId !== storedConnection.workspaceId)
@@ -277,6 +325,25 @@ function installBridge() {
           }
           if (response.status !== 401)
             throw new Error("Local workspace is unavailable.");
+        }
+        if (reopeningLocalData) {
+          const confirmation = await dialog.showMessageBox(
+            BrowserWindow.fromWebContents(event.sender),
+            {
+              type: "question",
+              buttons: ["Cancel", "Restore access"],
+              defaultId: 0,
+              cancelId: 0,
+              title: "Restore local owner access",
+              message: "Restore access to this Mac's local workspace?",
+              detail:
+                "This is an owner recovery action using your Mac account's local data access. It creates a new device connection. Previously revoked tokens stay revoked; other devices and remote hosts gain no access.",
+            },
+          );
+          if (confirmation.response !== 1) {
+            await localHost.stop();
+            return null;
+          }
         }
         const connection = await localHost.bootstrap();
         writeConnection(connection);

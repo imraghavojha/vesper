@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld(
     saveConnection: (value) =>
       ipcRenderer.invoke("vesper:connection:save", value),
     createLocalWorkspace: () => ipcRenderer.invoke("vesper:local:create"),
+    restartLocalHost: () => ipcRenderer.invoke("vesper:local:restart"),
     localHostStatus: () => ipcRenderer.invoke("vesper:local:status"),
     onLocalHostStatus: (callback) => subscribe("vesper:local:status", callback),
     onConnectionChanged: (callback) =>
