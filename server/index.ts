@@ -32,7 +32,7 @@ const handler = createHTTPHandler({
     };
   },
 });
-const webRoot = fileURLToPath(new URL("../web/", import.meta.url));
+const webRoot = resolve(fileURLToPath(new URL("../web/", import.meta.url)));
 const attempts = new Map<string, { count: number; until: number }>();
 const types: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
