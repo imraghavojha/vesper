@@ -18,7 +18,7 @@ Move Linear work to In Progress when claimed, In Review when the PR is ready, an
 
 ## Review services and merge policy
 
-Greptile is the preferred external reviewer. Repo configuration is prepared. Its GitHub App and account authorization still require verification. Use base-tier review on ready PRs and meaningful updates; skip drafts. Do not sign up for paid overages. CodeRabbit or Macroscope may be added later if their findings justify the additional noise/cost. T3's use of a sponsor is not proof of credits for Vesper.
+Greptile is the preferred external reviewer. Its GitHub App is installed for Vesper only, repository reviews are enabled, and a review check appeared on the setup PR. Use base-tier review on ready PRs and meaningful updates; skip drafts. Do not sign up for paid overages. The current account has a no-card trial through October 10, 2026 and no confirmed permanent free plan. Check `HANDOFF.md` before relying on long-term service. CodeRabbit or Macroscope may be added later if their findings justify the additional noise/cost. T3's use of a sponsor is not proof of credits for Vesper.
 
 GitHub should require the `Repository checks` status on main while this is a planning repository. The first implementation PR adds appropriate app typecheck, lint, domain tests and build checks, then updates protection. Do not keep a green documentation check as the only gate once code exists. Resolve review conversations before merge. Repository owner retains merge authority unless a later task explicitly authorizes autonomous merging.
 

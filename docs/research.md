@@ -110,6 +110,8 @@ The user said “reptile”; Greptile is the likely intended product. Its [curre
 
 Theo's live [sponsor page](https://t3.gg/sponsors) was also inspected in Chrome. It lists CodeRabbit, Greptile and Macroscope, plus Browserbase and Blacksmith. The [Greptile sponsor detail](https://t3.gg/sponsors/greptile) links to a referral destination but does not show a specific free-credit offer. Sponsor status is verified; extra credits beyond the vendor's published plan are not.
 
+Account-specific verification changed the practical result: onboarding created a no-card trial through October 10. Billing explicitly says the service ends afterward. The in-app OSS checker requires 50 GitHub stars and rejected Vesper at zero stars. No Starter selection appeared in the inspected billing portal. This discrepancy with public pricing is unresolved; the repository does not claim permanent free reviews.
+
 [Greptile configuration](https://www.greptile.com/docs/code-review/greptile-json-reference) supports per-repository triggers, draft behavior, review effort, and custom instructions. Vesper uses base review effort, no draft reviews and no automatic fixes. Configuration does not install the GitHub App.
 
 Its [Linear integration](https://www.greptile.com/docs/linear-integration) reads issue context and needs admin authorization. Limit teams rather than grant an entire unrelated workspace. GitHub's Linear integration should link issue identifiers in branch/PR names and update workflow state. Confirm actual installation and webhook behavior before calling this automated.
