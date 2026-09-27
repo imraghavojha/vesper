@@ -2,11 +2,9 @@
   text-align: left;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px 0;
-  border-top: 1px solid var(--chat-line);
-  font-size: 13px;
-  line-height: 1.35;
+  gap: 16px;
+  font-size: 14px;
+  line-height: 20px;
   color: inherit;
   min-width: 0;
 }
@@ -20,15 +18,25 @@
 
 .provider-panel__title {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 20px;
   font-weight: 600;
 }
 
-.provider-panel__status,
+.provider-panel__status {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--v-surface, transparent);
+}
+
 .provider-panel__group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -44,94 +52,141 @@
 .provider-panel__muted,
 .provider-panel__capabilities,
 .provider-panel__others {
-  color: var(--chat-muted);
-  font-size: 12px;
+  color: var(--v-secondary, inherit);
+  font-size: 13px;
 }
 
 .provider-panel__capabilities,
 .provider-panel__others {
-  margin: 0;
-  padding: 0 0 0 14px;
+  margin: 8px 0 0;
+  padding: 0 0 0 16px;
+  line-height: 20px;
 }
 
 .provider-panel__label {
-  font-size: 12px;
-  font-weight: 600;
+  display: block;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--v-secondary, inherit);
 }
 
 .provider-panel__select {
   width: 100%;
   min-width: 0;
-  padding: 4px 6px;
+  height: 36px;
+  padding: 0 12px;
   font: inherit;
-  font-size: 12px;
+  font-size: 14px;
   color: inherit;
-  background: transparent;
-  border: 1px solid var(--chat-line);
-  border-radius: 4px;
-}
-
-.provider-panel__button {
-  align-self: flex-start;
-  padding: 3px 8px;
-  font: inherit;
-  font-size: 12px;
-  color: inherit;
-  background: transparent;
-  border: 1px solid var(--chat-line);
-  border-radius: 4px;
+  background: var(--v-surface, transparent);
+  border: 1px solid var(--v-separator, currentColor);
+  border-radius: 12px;
   cursor: pointer;
 }
 
-.provider-panel__button--primary {
-  font-weight: 600;
+.provider-panel .provider-panel__button {
+  align-self: flex-start;
+  height: 32px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: inherit;
+  background: var(--v-selected, transparent);
+  border: 0;
+  border-radius: 16px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s;
 }
 
-.provider-panel__button:disabled,
+.provider-panel .provider-panel__button:hover:not(:disabled) {
+  background: var(--v-separator, transparent);
+}
+
+.provider-panel .provider-panel__button--primary {
+  background: var(--v-text, currentColor);
+  color: var(--v-bg, Canvas);
+}
+
+.provider-panel .provider-panel__button--primary:hover:not(:disabled) {
+  background: var(--v-text, currentColor);
+  opacity: 0.9;
+}
+
+.provider-panel .provider-panel__button:disabled,
 .provider-panel__select:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  opacity: 0.45;
+  cursor: default;
 }
 
 .provider-panel__button:focus-visible,
-.provider-panel__select:focus-visible {
-  outline: 2px solid currentColor;
-  outline-offset: 1px;
+.provider-panel__select:focus-visible,
+.provider-panel__details summary:focus-visible {
+  outline: 2px solid var(--v-focus, currentColor);
+  outline-offset: 2px;
 }
 
 .provider-panel__notice,
 .provider-panel__error {
   margin: 0;
-  padding: 4px 6px;
-  font-size: 12px;
-  border: 1px solid currentColor;
-  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 20px;
+  border-radius: 12px;
   overflow-wrap: anywhere;
 }
 
+.provider-panel__notice {
+  background: color-mix(in srgb, var(--v-warning, orange) 14%, transparent);
+  color: var(--v-warning, inherit);
+}
+
 .provider-panel__error {
-  font-weight: 600;
+  background: color-mix(in srgb, var(--v-danger, red) 12%, transparent);
+  color: var(--v-danger, inherit);
+  font-weight: 500;
 }
 
 .provider-panel__usage {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .provider-panel__usage-row {
   display: flex;
   justify-content: space-between;
   gap: 8px;
+  margin: 0;
 }
 
 .provider-panel__usage dt {
-  color: var(--chat-muted);
+  color: var(--v-secondary, inherit);
 }
 
 .provider-panel__usage dd {
   margin: 0;
   font-variant-numeric: tabular-nums;
+}
+
+/* Outranks the setup screens' global `details` rules. */
+.chat-shell .provider-panel .provider-panel__details {
+  margin: 0;
+  font-size: 13px;
+  color: var(--v-secondary, inherit);
+}
+
+.provider-panel__details summary {
+  cursor: pointer;
+  width: fit-content;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.provider-panel__details summary:hover {
+  color: var(--v-text, inherit);
 }

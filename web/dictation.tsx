@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { SpeechStatus } from "../shared/desktop.js";
+import { MicIcon } from "./presentation/icons.js";
 
 export function Dictation({
   disabled,
@@ -16,6 +17,7 @@ export function Dictation({
   const [text, setText] = useState("");
   const [discarding, setDiscarding] = useState(false);
   const [error, setError] = useState("");
+  const [open, setOpen] = useState(false);
   const current = useRef<{
     sessionId: string;
     text: string;
@@ -128,10 +130,54 @@ export function Dictation({
       }
     }
   }
+  const ready = !!status?.available && status.assets === "ready";
+  const statusText = status
+    ? status.available
+      ? `On-device · ${status.assets} · microphone ${status.microphone}`
+      : "On-device speech is unavailable on this Mac."
+    : "Voice creates a private draft. It never sends automatically.";
+  const panelVisible = open || phase !== "idle" || !!text || !!error;
   return (
-    <section className="dictation" aria-label="Voice input">
+    <div className="dictation-root">
+      <button
+        type="button"
+        className={
+          "composer-icon dictation-trigger" +
+          (phase === "recording" ? " recording" : "")
+        }
+        aria-label={
+          phase === "idle"
+            ? ready
+              ? "Start voice input"
+              : "Voice input options"
+            : "Voice input in progress"
+        }
+        title={phase === "idle" ? statusText : "Voice input in progress"}
+        aria-expanded={panelVisible}
+        aria-pressed={phase === "recording" ? true : undefined}
+        disabled={disabled && phase === "idle"}
+        onClick={() => {
+          if (phase === "idle" && ready && !open) void command("start");
+          else setOpen((value) => (phase === "idle" ? !value : true));
+        }}
+      >
+        <MicIcon size={20} />
+      </button>
+      {panelVisible && (
+        <section
+          className="dictation"
+          aria-label="Voice input"
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && phase === "idle" && !text) {
+              event.stopPropagation();
+              setOpen(false);
+              setError("");
+            }
+          }}
+        >
       {phase === "idle" ? (
         <>
+          <span className="dictation-status">{statusText}</span>
           <button
             type="button"
             disabled={disabled}
@@ -157,13 +203,17 @@ export function Dictation({
           >
             Record voice
           </button>
-          <span>
-            {status
-              ? status.available
-                ? `On-device · ${status.assets} · microphone ${status.microphone}`
-                : "On-device speech is unavailable on this Mac."
-              : "Voice creates a private draft. It never sends automatically."}
-          </span>
+          <button
+            type="button"
+            className="dictation-dismiss"
+            onClick={() => {
+              setOpen(false);
+              setError("");
+            }}
+            disabled={!!text}
+          >
+            Done
+          </button>
         </>
       ) : (
         <>
@@ -215,7 +265,27 @@ export function Dictation({
           Add transcript to draft
         </button>
       )}
-      {error && <p role="alert">{error}</p>}
-    </section>
+      {phase === "idle" && text && (
+        <button
+          type="button"
+          onClick={() => {
+            // Only a retained, finished transcript: never an active or newer
+            // capture, and the conversation draft is left untouched.
+            if (current.current) return;
+            setText("");
+            setError("");
+          }}
+        >
+          Discard transcript
+        </button>
+      )}
+      {error && (
+        <p className="dictation-error" role="alert">
+          {error}
+        </p>
+      )}
+        </section>
+      )}
+    </div>
   );
 }

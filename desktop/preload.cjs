@@ -23,6 +23,12 @@ contextBridge.exposeInMainWorld(
     showQuickChat: () => ipcRenderer.invoke("vesper:quick:show"),
     hideQuickChat: () => ipcRenderer.invoke("vesper:quick:hide"),
     showMainWindow: () => ipcRenderer.invoke("vesper:main:show"),
+    showSettings: (section = "general") =>
+      ipcRenderer.invoke("vesper:settings:show", section),
+    closeSettings: () => ipcRenderer.invoke("vesper:settings:close"),
+    settingsSection: () => ipcRenderer.invoke("vesper:settings:section"),
+    onSettingsSection: (callback) =>
+      subscribe("vesper:settings:section", callback),
     setQuickShortcut: (accelerator) =>
       ipcRenderer.invoke("vesper:quick:shortcut", accelerator),
     onQuickStatus: (callback) => subscribe("vesper:quick:status", callback),

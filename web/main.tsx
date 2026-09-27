@@ -22,12 +22,22 @@ import type {
   SpeechEvent,
 } from "../shared/desktop.js";
 import { ConversationScreen } from "./chat.js";
+import { VesperAvatar } from "./presentation/icons.js";
 
 const STORAGE_KEY = "vesper.connection.v1";
 type SavedConnection = Connection & {
   workspaceId: string;
   mode?: "local" | "remote";
 };
+/** Sections the native settings window may be opened at. */
+export type SettingsEntrySection =
+  | "general"
+  | "providers"
+  | "devices"
+  | "dictation";
+const settingsWindow =
+  !!window.vesperDesktop &&
+  new URLSearchParams(location.search).get("settings") === "1";
 class LocalWorkspaceRestoreError extends Error {}
 type LocalHostStatus = {
   state: "stopped" | "starting" | "running" | "failed";
@@ -73,6 +83,12 @@ declare global {
           workspaceId: string;
           conversationId: string;
         }) => void,
+      ): () => void;
+      showSettings(section?: SettingsEntrySection): Promise<void>;
+      closeSettings(): Promise<void>;
+      settingsSection(): Promise<SettingsEntrySection>;
+      onSettingsSection(
+        callback: (section: SettingsEntrySection) => void,
       ): () => void;
       speechCommand(command: SpeechCommand): Promise<void>;
       cancelSpeech(): Promise<void>;
@@ -162,9 +178,7 @@ const queries = new QueryClient({
 function Brand() {
   return (
     <div className="brand">
-      <span className="mark" aria-hidden="true">
-        v
-      </span>
+      <VesperAvatar size={30} />
       <span>vesper</span>
     </div>
   );
@@ -244,7 +258,9 @@ function App() {
         <header>
           <Brand />
           {connection ? (
-            <button onClick={() => setView("chat")}>Back to chat</button>
+            <button onClick={() => setView("chat")}>
+              {settingsWindow ? "Back to Settings" : "Back to chat"}
+            </button>
           ) : (
             <span className="header-note">Your personal workspace</span>
           )}
@@ -266,9 +282,18 @@ function App() {
         <main className="workspace">
           <p role="status">Opening your saved connection…</p>
         </main>
+      ) : settingsWindow && !connection ? (
+        // The settings window never pairs or creates workspaces itself.
+        <main className="workspace">
+          <p role="status">
+            Connect a workspace in the main Vesper window, then reopen
+            Settings.
+          </p>
+        </main>
       ) : connection && view === "chat" ? (
         <ConversationScreen
           key={connection.workspaceId}
+          settingsWindow={settingsWindow}
           connection={connection}
           onWorkspace={() => setView("workspace")}
           onRevoked={forgetRevoked}
@@ -292,7 +317,7 @@ function App() {
       )}
       {(!connection || view === "workspace") && (
         <footer>
-          Vesper · Workspace preview <span>One shared host. Your devices.</span>
+          Vesper <span>One shared host. Your devices.</span>
         </footer>
       )}
     </>
@@ -368,9 +393,9 @@ function Welcome({
         </p>
       )}
       <p className="scope-note">
-        This release saves conversations and sets up your workspace and devices.
-        Agent replies, voice, account connections and Android are still being
-        built. This setup screen is temporary.
+        Chat with Claude using your own account. Dictation uses on-device
+        speech where this Mac supports it. Connectors and scheduled work aren’t
+        available yet.
       </p>
     </main>
   );
@@ -517,9 +542,8 @@ function Pair({
         </details>
       </section>
       <p className="scope-note">
-        This first release connects devices and preserves workspace identity.
-        Saved conversations are available. Agent replies, connectors, and
-        scheduled work are not available yet.
+        Conversations and Claude chat are available once connected. Connectors
+        and scheduled work aren’t available yet.
       </p>
     </main>
   );
@@ -753,6 +777,10 @@ function Workspace({
           <h2>Available here</h2>
           <ul className="capabilities">
             <li>
+              <span className="check">✓</span> Chat with Claude using your
+              selected account
+            </li>
+            <li>
               <span className="check">✓</span> Saved conversations and private
               drafts
             </li>
@@ -768,9 +796,8 @@ function Workspace({
             </li>
           </ul>
           <p className="muted">
-            Your conversations and messages are saved. Agent replies, account
-            connections and schedules are being built. No background model work
-            runs in this preview.
+            Replies run only when you send a message. Connectors and scheduled
+            work aren’t available yet, and nothing runs in the background.
           </p>
           <div className="small-note">
             {connection.mode === "local"

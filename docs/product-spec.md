@@ -58,7 +58,7 @@ MFA and reauthentication have a visible waiting state and a user takeover path. 
 | Google Contacts and Tasks | Lookup and task management where authorized; connect them to recipient resolution and goals. |
 | Canvas | Institution-specific base URL plus securely entered token; courses, assignments, submission status, announcements, available grades and course materials. Show actual token permissions and unsupported endpoints. |
 | SubItUp | Employee login and SSO route, saved browser session, next-month shift comparison on the actual last calendar day. Prefer its existing calendar feed; reconcile gaps without duplicates or changes to employee shifts. |
-| Outlook | Microsoft Graph where the tenant permits it; browser login fallback for a permitted school account. Browser access does not override organization restrictions. |
+| Outlook | Direct Microsoft Graph connector where permitted; this user's university account uses Vesper's browser. Browser access does not override organization restrictions. |
 | Google Messages | Experimental paired Messages for web session. Explain phone connectivity, pairing expiration, one-active-computer limits, and sending approval. Do not promise an official general personal-message API. |
 | Additional Muse catalog | Inventory retained in the observation record. Add by real user demand and verified API access. A catalog entry must distinguish available, connected, unavailable, and planned. |
 
@@ -91,6 +91,8 @@ Settings preserve the observed groups: General, Connectors, Computer use, File s
 Wallet stays outside the first usable release. Do not present a working payment integration until an actual provider and approval flow exist. Meta account, Meta subscriptions, invitation codes, and training consent are replaced with Vesper-relevant account/provider and privacy controls. Default training/telemetry consent is off. Purchases and regulated services are not acceptance requirements for the initial personal assistant.
 
 ## Android
+
+The current delivery phase is Mac-only and prioritizes exact Muse UI and interaction parity. Android remains future product scope; no Android implementation or tooling is part of this phase.
 
 React Native screens preserve chat, side chats, feed swipes, goals, library, agent panel, and settings. The phone provides a native assistant entry point, conversational voice with interruption/cancellation, and screen context only through explicit user permission and supported Android capture. Show microphone/capture state, honor protected screens and revocation, and keep sensitive credential entry outside model-visible context. Direct Muse Android inspection must establish the target voice and screen interactions before claiming parity. Use native modules for secure storage, notifications, alarm/timer intents, audio controls where permitted, and default-assistant registration.
 
