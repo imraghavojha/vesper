@@ -6,6 +6,8 @@ export type GoogleAccount = {
   message: string | null;
   lastSyncAt: string | null;
   syncing: boolean;
+  // Increases on every change, including sync start and finish.
+  revision: number;
   calendars: Array<{ id: string; summary: string; primary: boolean }>;
 };
 

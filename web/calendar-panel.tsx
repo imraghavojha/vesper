@@ -22,23 +22,16 @@ const time = (value: string) =>
     minute: "2-digit",
   });
 
-// Groups the next seven local days. Declined, free and all-day events never conflict.
+// Lists each event under every local date it covers in the next seven days.
+// Declined, free and all-day events never conflict.
 function agenda(events: AgendaEvent[]) {
   const now = new Date();
-  const today = dayKey(now);
-  const limit = dayKey(new Date(now.getTime() + 7 * 86_400_000));
-  const upcoming = events.filter((event) =>
-    event.allDay ? event.end > today : new Date(event.end) > now,
-  );
-  const days = new Map<string, Array<AgendaEvent & { conflict: boolean }>>();
-  for (const event of upcoming) {
-    const start = event.allDay ? event.start : dayKey(new Date(event.start));
-    const key = start < today ? today : start;
-    if (key >= limit) continue;
-    const conflict =
+  const marked = events.map((event) => ({
+    ...event,
+    conflict:
       event.busy &&
       !event.allDay &&
-      upcoming.some(
+      events.some(
         (other) =>
           other !== event &&
           other.busy &&
@@ -46,10 +39,24 @@ function agenda(events: AgendaEvent[]) {
           (other.icalUid === null || other.icalUid !== event.icalUid) &&
           other.start < event.end &&
           event.start < other.end,
-      );
-    days.set(key, [...(days.get(key) ?? []), { ...event, conflict }]);
-  }
-  return [...days].sort(([a], [b]) => a.localeCompare(b));
+      ),
+  }));
+  return Array.from({ length: 7 }, (_, offset) => {
+    const date = (days: number) =>
+      new Date(now.getFullYear(), now.getMonth(), now.getDate() + days);
+    const day = date(offset);
+    const from = offset ? day : now;
+    const key = dayKey(day);
+    return [
+      day,
+      marked.filter((event) =>
+        event.allDay
+          ? event.start <= key && event.end > key
+          : new Date(event.start) < date(offset + 1) &&
+            new Date(event.end) > from,
+      ),
+    ] as const;
+  }).filter(([, list]) => list.length);
 }
 
 export function CalendarPanel({
@@ -240,9 +247,9 @@ export function CalendarPanel({
           <div className="settings-card">
             {days.length ? (
               days.map(([day, events]) => (
-                <section key={day} className="calendar-day">
+                <section key={day.toISOString()} className="calendar-day">
                   <h5>
-                    {new Date(day + "T00:00").toLocaleDateString(undefined, {
+                    {day.toLocaleDateString(undefined, {
                       weekday: "long",
                       month: "short",
                       day: "numeric",

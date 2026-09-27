@@ -150,35 +150,37 @@ export function createGoogleCalendar(options: Options) {
       /* A locked or unavailable vault keeps the entry; Secure Store still lists it. */
     }
   }
-  function update(id: string, problem: Problem | null) {
+  // Publishes a change so every client sees sync start and finish. A finished
+  // run only records its outcome while the account still uses its credential.
+  function update(id: string, problem?: Problem | null, entry?: string) {
     transaction(db, () => {
-      const result = (
-        problem
-          ? db
-              .prepare(
-                "UPDATE google_accounts SET status=?,message=?,revision=revision+1 WHERE id=? RETURNING revision",
-              )
-              .get(problem.status, problem.message, id)
-          : db
-              .prepare(
-                "UPDATE google_accounts SET status='connected',message=NULL,lastSyncAt=?,revision=revision+1 WHERE id=? RETURNING revision",
-              )
-              .get(new Date().toISOString(), id)
-      ) as { revision: number } | undefined;
+      const result = db
+        .prepare(
+          `UPDATE google_accounts SET ${
+            problem === undefined
+              ? "status=status"
+              : problem
+                ? "status=?,message=?"
+                : "status='connected',message=NULL,lastSyncAt=?"
+          },revision=revision+1 WHERE id=? AND vaultEntryId=? RETURNING revision`,
+        )
+        .get(
+          ...(problem === undefined
+            ? []
+            : problem
+              ? [problem.status, problem.message]
+              : [new Date().toISOString()]),
+          id,
+          entry ?? row(id).vaultEntryId,
+        ) as { revision: number } | undefined;
       if (result) options.appendChange(id, result.revision);
     });
     options.notify();
   }
 
-  // Access tokens live only in memory; the refresh token stays in the vault.
-  const tokens = new Map<
-    string,
-    { entry: string; value: string; expiresAt: number }
-  >();
+  // Every sync refreshes through Secure Store, so revoked, changed or locked
+  // entries stop access. The short-lived access token is never cached.
   async function accessToken(account: AccountRow) {
-    const cached = tokens.get(account.id);
-    if (cached?.entry === account.vaultEntryId && cached.expiresAt > Date.now())
-      return cached.value;
     const config = client();
     if (!config) throw new GoogleError(0, "notConfigured");
     let response: { status: number; body: Json } | undefined;
@@ -206,11 +208,6 @@ export function createGoogleCalendar(options: Options) {
         response?.status ?? 0,
         String(response?.body.error ?? ""),
       );
-    tokens.set(account.id, {
-      entry: account.vaultEntryId,
-      value: response.body.access_token,
-      expiresAt: Date.now() + (Number(response.body.expires_in) - 60) * 1000,
-    });
     return response.body.access_token as string;
   }
   async function pages(
@@ -404,14 +401,13 @@ export function createGoogleCalendar(options: Options) {
         });
         for (const calendar of calendars)
           await syncCalendar(id, calendar.id, token);
-        update(id, null);
+        update(id, null, account.vaultEntryId);
       } catch (error) {
-        if (error instanceof GoogleError && error.status === 401)
-          tokens.delete(id);
-        update(id, problem(error));
+        update(id, problem(error), account.vaultEntryId);
       }
     })().finally(() => running.delete(id));
     running.set(id, work);
+    update(id);
     return work;
   }
 
@@ -436,7 +432,7 @@ export function createGoogleCalendar(options: Options) {
       }>;
       const events = db
         .prepare(
-          "SELECT * FROM google_events WHERE end > ? AND start < ? ORDER BY start, summary LIMIT 300",
+          "SELECT * FROM google_events WHERE end > ? AND start < ? ORDER BY start, summary",
         )
         .all(
           new Date(Date.now() - DAY).toISOString(),
@@ -451,6 +447,7 @@ export function createGoogleCalendar(options: Options) {
           message: account.message,
           lastSyncAt: account.lastSyncAt,
           syncing: running.has(account.id),
+          revision: account.revision,
           calendars: calendars
             .filter((calendar) => calendar.accountId === account.id)
             .map((calendar) => ({
@@ -622,8 +619,11 @@ export function createGoogleCalendar(options: Options) {
       });
       options.notify();
       if (previous) forget(previous);
-      tokens.delete(id);
-      void sync(id).catch(() => {});
+      // A run started with the replaced credential can't record its outcome;
+      // sync again with the new one once it ends.
+      void (running.get(id) ?? Promise.resolve())
+        .then(() => sync(id))
+        .catch(() => {});
       return {
         status: 200,
         text: `Google Calendar is connected for ${email}. You can close this tab and return to Vesper.`,
@@ -637,7 +637,7 @@ export function createGoogleCalendar(options: Options) {
         await options.vault.withSecret(scope(account), async (secret) => {
           const response = await fetch(REVOKE_URL, {
             ...form({ token: secret.toString("utf8") }),
-            signal: AbortSignal.timeout(20_000),
+            signal: AbortSignal.timeout(5_000),
           });
           remoteRevoked = response.ok;
         });
@@ -645,7 +645,6 @@ export function createGoogleCalendar(options: Options) {
         /* Local removal continues; the result reports that Google wasn't confirmed. */
       }
       forget(account.vaultEntryId);
-      tokens.delete(id);
       transaction(db, () => {
         if (
           db.prepare("DELETE FROM google_accounts WHERE id=?").run(id).changes

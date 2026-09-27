@@ -158,8 +158,9 @@ export const appRouter = t.router({
     .mutation(({ ctx, input }) => ctx.store.calendar.connect(input.hostUrl)),
   syncGoogle: authenticated
     .input(z.object({ accountId: z.string().uuid() }).strict())
-    .mutation(async ({ ctx, input }) => {
-      await ctx.store.calendar.sync(input.accountId);
+    // Starts the sync and returns; its outcome arrives as a change notice.
+    .mutation(({ ctx, input }) => {
+      void ctx.store.calendar.sync(input.accountId).catch(() => {});
       return ctx.store.calendar.snapshot();
     }),
   disconnectGoogle: authenticated
