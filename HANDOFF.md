@@ -1,6 +1,6 @@
 # Vesper handoff
 
-The user wants a public-ready Muse-style open personal agent for macOS and Android, with their choice of agent harness and eligible subscription, a shared vault, and an independent host that works while the Mac is off. This phase researches and sets up future development. Do not begin unrelated app implementation while completing setup.
+The user wants a public-ready Muse-style open personal agent for macOS and Android, with their choice of agent harness and eligible subscription, a shared vault, and an independent host that works while the Mac is off. Android is the primary everyday assistant, including native invocation, voice conversation and user-authorized screen context; Mac is a paired client. The independent host remains responsible for durable provider/browser work and schedules. Research and setup are complete. Application work now proceeds in sequential, reviewed Linear issues, with Mac workflows first and Android acceptance still required.
 
 Read [final architecture](docs/final-architecture.md) and [Claude review record](docs/architecture-review.md), then [product specification](docs/product-spec.md), [provider requirements](docs/providers.md), [observations](docs/muse-observations.md), [research](docs/research.md), and the assigned item in [backlog](docs/backlog.md). Follow [workflow](docs/workflow.md) and `AGENTS.md`.
 
@@ -8,7 +8,7 @@ Also read [architecture and concrete reuse](docs/architecture-and-reuse.md). The
 
 ## Current state
 
-- Application implementation has not started. No backend behavior has been tested.
+- IMR-6 now has a Mac/browser workspace foundation: authenticated pairing, SQLite identity/device persistence, revocation, optimistic rename conflicts and reconnect status. See [development](docs/development.md). Temporary real HTTP/SQLite verification covered concurrent pairing, authentication, revocation, restart/crash recovery and malformed requests. Android, actual independent-host deployment and scheduled work remain open acceptance.
 - Muse 4.1 Mac UI and website were inspected through computer use. The initial main chat was read through the accessibility tree, with some long offscreen messages truncated. Static screenshots were captured inline; no screenshot folder or private transcripts were created in this repository.
 - T3 Code source was inspected at commit `ab099178a7b7f9728843e90fc95ed90bb61d710d` in a temporary checkout outside Vesper.
 - Final design uses an independent shared Node/TypeScript backend, SQLite for a personal deployment, an application-encrypted shared vault, supervised Chromium/provider workers, Electron/React and React Native clients. Mac-off operation is required. Three completed Claude Opus 5.5 review rounds informed the decision. Public-release reliability and maintainability matter more than minimizing component count. Mac-Keychain-only storage and Mac-only hosting are rejected.
@@ -18,7 +18,7 @@ Also read [architecture and concrete reuse](docs/architecture-and-reuse.md). The
 
 ## Next agent
 
-Start with V01 for the complete reference target or V02 for a shared first-run experience. V22 handles review-service setup. V24 can proceed after avatar/motion references are settled. Browser sessions, local secure filling and shared types precede real connector implementation. Claim the corresponding Linear issue before work and use its ID in the branch/PR.
+Continue V02 for remaining shared-workspace acceptance, with Mac-first delivery before Android as requested. V01 still owns the complete reference target. V22 handles review-service setup. V24 can proceed after avatar/motion references are settled. Browser sessions, local secure filling and shared types precede real connector implementation. Claim the corresponding Linear issue before work and use its ID in the branch/PR.
 
 Do not claim perfect cloning from screenshots alone. Active browser details, Android UI, motion timings and less common dialogs still need evidence. Do not copy Muse's inconsistent month-end scheduling: its chat, goal description and upcoming date disagree.
 

@@ -2,7 +2,7 @@
 
 An open personal agent for macOS and Android, with a Muse-style interface, a shared browser and vault, interchangeable agents, and automation that runs only when asked or scheduled. An independent shared host keeps Mac and Android synced and works while the Mac is off.
 
-This repository currently contains product research and development setup. There is no application yet.
+The first application slice connects Mac and browser clients to an authenticated shared workspace. Chats, providers, connectors, schedules and Android are not implemented yet. See [development](docs/development.md) to run the host and clients.
 
 - [Final architecture](docs/final-architecture.md)
 - [Claude architecture review](docs/architecture-review.md)
@@ -15,7 +15,7 @@ This repository currently contains product research and development setup. There
 - [Agent handoff](HANDOFF.md)
 - [Development workflow](docs/workflow.md)
 
-Start with `HANDOFF.md`. Run `node scripts/check-repository.mjs` to check the planning repository. Application tests will be introduced with the first implementation issues.
+Start with `HANDOFF.md`. Run `node scripts/check-repository.mjs` to check the planning repository. Run `npm run check` for application typechecking, lint and builds. Runtime verification evidence is recorded with each PR.
 
 After editing `docs/backlog.json`, run `node scripts/backlog-document.mjs` to regenerate the readable backlog, then rerun the repository check.
 
