@@ -168,9 +168,14 @@ export function openStore(directory: string) {
         });
     },
     revoke(id: string) {
-      db.prepare(
-        "UPDATE devices SET revokedAt = ? WHERE id = ? AND revokedAt IS NULL",
-      ).run(new Date().toISOString(), id);
+      db.transaction(() => {
+        db.prepare(
+          "UPDATE devices SET revokedAt = ? WHERE id = ? AND revokedAt IS NULL",
+        ).run(new Date().toISOString(), id);
+        // A revoked device must not regain access through a code it issued earlier.
+        // This single-owner workspace invalidates all unused codes atomically.
+        db.prepare("DELETE FROM pairing_codes").run();
+      })();
     },
     close() {
       db.close();

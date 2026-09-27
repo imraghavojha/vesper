@@ -25,7 +25,7 @@ The initial host writes a random, one-use code to its private `pairing-code` fil
 
 A host operator can run `npm run pairing-code` to create a replacement code. With compiled production files, run `node dist/server/pairing.js`. Use the same `VESPER_DATA_DIR` as the running host. This recovers access after a lost device or interrupted first pairing without deleting the workspace. It does not revoke existing devices. Revoke lost devices from the connected client afterwards.
 
-Pairing atomically consumes the code and creates a device. The host stores only token/code hashes. Device revocation invalidates subsequent requests. Clients pin the workspace ID and refuse a different workspace at the same URL. Workspace renames carry an expected revision and reject stale edits. The first slice refreshes status every three seconds while visible; it is not the later durable event-stream sync implementation.
+Pairing atomically consumes the code and creates a device. The host stores only token/code hashes. Device revocation invalidates subsequent requests and atomically cancels every unused pairing code in this single-owner workspace. Create a new code after revoking a device; a code issued before revocation cannot restore access. Clients pin the workspace ID and refuse a different workspace at the same URL. Workspace renames carry an expected revision and reject stale edits. The first slice refreshes status every three seconds while visible; it is not the later durable event-stream sync implementation.
 
 The Mac shell stores its device connection using Electron `safeStorage`, backed by the operating system. It fails to save if encryption is unavailable. Only its trusted top-level renderer can call the narrow load/save bridge. The renderer needs the token in memory for requests, so a compromised trusted renderer remains a risk. The browser preview retains its connection only in tab session storage. It survives reload, but does not promise persistence after the browser session ends. Neither client stores website passwords or third-party account tokens in this slice.
 
@@ -45,7 +45,7 @@ docker run -d --name vesper --restart unless-stopped \
   -e VESPER_HOST_LABEL='Home server' vesper
 ```
 
-Put an existing TLS reverse proxy in front of port 4317. For example, a Caddy site at `vesper.example.com` can use `reverse_proxy 127.0.0.1:4317`. Use your own hostname and configure DNS/network access. Remote clients require HTTPS. Do not expose the raw HTTP port publicly. Application authentication is required even on a private network.
+Put an existing TLS reverse proxy in front of port 4317. For example, a Caddy site at `vesper.example.com` can use `reverse_proxy 127.0.0.1:4317`. Use your own hostname and configure DNS/network access. Remote clients require HTTPS. Do not expose the raw HTTP port publicly. Application authentication is required even on a private network. Apply request-rate controls at the trusted reverse proxy using its verified client identity, without combining all proxied clients into one shared bucket. The application does not trust caller-supplied forwarded addresses. Its 144-bit pairing codes expire after ten minutes and are consumed once; request bodies are capped at 16 KiB.
 
 The initial code is inside `/var/lib/vesper/pairing-code`. The host operator can read it using `docker exec vesper cat /var/lib/vesper/pairing-code`. To renew it, use `docker exec vesper node dist/server/pairing.js`. Do not paste codes in issues or PRs.
 

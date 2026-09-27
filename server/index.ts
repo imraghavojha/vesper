@@ -33,7 +33,6 @@ const handler = createHTTPHandler({
   },
 });
 const webRoot = resolve(fileURLToPath(new URL("../web/", import.meta.url)));
-const attempts = new Map<string, { count: number; until: number }>();
 const types: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript",
@@ -77,21 +76,6 @@ const server = createServer(async (req, res) => {
     return;
   }
   if (url.pathname.startsWith("/trpc/")) {
-    if (url.pathname.includes("pair")) {
-      const key = req.socket.remoteAddress ?? "unknown";
-      const now = Date.now();
-      for (const [id, value] of attempts)
-        if (value.until < now) attempts.delete(id);
-      const entry = attempts.get(key) ?? { count: 0, until: now + 60_000 };
-      entry.count++;
-      attempts.set(key, entry);
-      if (entry.count > 10) {
-        res
-          .writeHead(429, { "Retry-After": "60" })
-          .end("Too many pairing attempts. Try again in one minute.");
-        return;
-      }
-    }
     await handler(req, res);
     return;
   }

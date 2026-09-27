@@ -605,7 +605,8 @@ function Workspace({
       >
         <h2 id="revoke-title">Revoke device access?</h2>
         <p>
-          {revokeCandidate?.name} will need a new pairing code to reconnect.
+          {revokeCandidate?.name} will need a new pairing code to reconnect. All
+          unused workspace pairing codes will also be canceled.
         </p>
         <div className="actions">
           <button autoFocus onClick={() => setRevokeCandidate(null)}>
@@ -619,6 +620,7 @@ function Workspace({
               if (device)
                 void act(async () => {
                   await api.revokeDevice.mutate({ id: device.id });
+                  setPairCode(null);
                   if (device.id === data?.device.id) disconnect();
                 });
             }}
