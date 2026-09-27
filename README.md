@@ -7,6 +7,8 @@ This repository currently contains product research and development setup. There
 - [Product specification](docs/product-spec.md)
 - [Muse observation record](docs/muse-observations.md)
 - [Technology research and sources](docs/research.md)
+- [Architecture and concrete code reuse](docs/architecture-and-reuse.md)
+- [Interchangeable providers and subscriptions](docs/providers.md)
 - [Engineering backlog](docs/backlog.md)
 - [Agent handoff](HANDOFF.md)
 - [Development workflow](docs/workflow.md)

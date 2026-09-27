@@ -1,0 +1,9 @@
+{
+  "strictness": 2,
+  "effort": "base",
+  "autoReview": ["open", "push"],
+  "triggerOnDrafts": false,
+  "shouldUpdateDescription": false,
+  "fixWithAI": false,
+  "instructions": "Read AGENTS.md and the linked Linear acceptance criteria. Focus on correctness, credential isolation, origin/account scoping, stale approvals, durable job recovery, calendar idempotency, provider switching, and zero unsolicited model work. Require meaningful tests for backend changes. Do not mistake this planning repository for an implemented app. Do not demand speculative abstractions or cosmetic rewrites. Flag any secret or personal reference data included in commits."
+}
