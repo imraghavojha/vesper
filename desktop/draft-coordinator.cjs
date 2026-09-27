@@ -21,8 +21,14 @@ function createDraftCoordinator(store) {
       if (
         !Number.isSafeInteger(expectedRevision) ||
         expectedRevision < 0 ||
-        expectedRevision !== current.revision
+        expectedRevision > current.revision
       )
+        return { ok: false, revision: current.revision };
+      // Both windows can acknowledge one receipt. An already-persisted exact
+      // result needs no write and must not become a spurious edit conflict.
+      if (JSON.stringify(draft) === JSON.stringify(current.draft))
+        return { ok: true, revision: current.revision, changed: false };
+      if (expectedRevision !== current.revision)
         return { ok: false, revision: current.revision };
       store.save(workspaceId, conversationId, draft);
       const revision = current.revision + 1;
@@ -30,7 +36,7 @@ function createDraftCoordinator(store) {
         fingerprint: JSON.stringify(draft),
         revision,
       });
-      return { ok: true, revision };
+      return { ok: true, revision, changed: true };
     },
   };
 }

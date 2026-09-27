@@ -286,7 +286,7 @@ function installBridge() {
         draft,
         expectedRevision,
       );
-      if (result.ok)
+      if (result.ok && result.changed)
         for (const win of windows)
           if (!win.isDestroyed() && win.webContents !== event.sender)
             win.webContents.send("vesper:drafts:changed", {
