@@ -1,0 +1,44 @@
+{
+  "name": "vesper",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.21.0 <25"
+  },
+  "scripts": {
+    "dev:server": "tsx watch server/index.ts",
+    "dev:web": "vite --host 127.0.0.1 --port 5177 --strictPort",
+    "desktop": "electron desktop/main.cjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint server shared web",
+    "build": "vite build && tsc -p tsconfig.server.json",
+    "start": "node dist/server/index.js",
+    "check": "node scripts/check-repository.mjs && npm run typecheck && npm run lint && npm run check:desktop && npm run build",
+    "pairing-code": "tsx server/pairing.ts",
+    "format": "prettier --write server shared web desktop",
+    "check:desktop": "node --check desktop/main.cjs && node --check desktop/preload.cjs"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "5.104.0",
+    "@trpc/client": "11.19.0",
+    "@trpc/server": "11.19.0",
+    "better-sqlite3": "13.0.3",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "9.6.0",
+    "@types/node": "24.19.0",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "electron": "44.4.5",
+    "eslint": "10.11.0",
+    "prettier": "3.9.9",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.70.1",
+    "vite": "8.3.1"
+  }
+}

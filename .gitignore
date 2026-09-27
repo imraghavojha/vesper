@@ -16,3 +16,5 @@ recordings/
 playwright-report/
 test-results/
 .github/pr-assets/
+
+*.tsbuildinfo

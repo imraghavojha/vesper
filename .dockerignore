@@ -1,0 +1,10 @@
+.git
+node_modules
+dist
+.vesper
+.t3
+.env*
+*.sqlite*
+*.db
+screenshots
+recordings

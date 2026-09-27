@@ -46,4 +46,4 @@ for (const name of files) {
     }
 }
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }
-console.log(`Repository checks passed: ${issues.length} issues, valid dependency graph, JSON and local Markdown links. No application tests exist yet.`);
+console.log(`Repository checks passed: ${issues.length} issues, valid dependency graph, JSON and local Markdown links. This verifies repository metadata, not application behavior.`);

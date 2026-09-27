@@ -1,6 +1,6 @@
 # What we are making
 
-Vesper is a publicly releasable personal assistant for one person's real daily work. It remembers conversations, operates a browser the person can see and take over, connects accounts, tracks goals, and runs explicitly scheduled jobs. It starts with macOS and Android, synced through an independent shared host. Scheduled work and shared services continue when the Mac is off. React powers the desktop UI; React Native powers mobile.
+Vesper is a publicly releasable personal assistant for one person's real daily work. It remembers conversations, operates a browser the person can see and take over, connects accounts, tracks goals, and runs explicitly scheduled jobs. It starts with macOS and Android, synced through an independent shared host. Scheduled work and shared services continue when the Mac is off. React powers the desktop UI; React Native powers mobile. Android is the primary everyday assistant, with Mac as a paired client. Native assistant invocation, voice conversation and user-authorized screen context are core phone experiences. The independent host remains responsible for durable browser/provider work and schedules; the phone does not need to keep desktop agent processes alive.
 
 The target is Muse's layout and interaction model with Vesper branding and an original cute avatar. This is a product specification, not a step-by-step implementation plan. The research document records recommended technologies and unresolved choices.
 
@@ -92,7 +92,7 @@ Wallet stays outside the first usable release. Do not present a working payment 
 
 ## Android
 
-React Native screens preserve chat, side chats, feed swipes, goals, library, agent panel, and settings. Use native modules for secure storage, notifications, alarm/timer intents, audio controls where permitted, and default-assistant registration.
+React Native screens preserve chat, side chats, feed swipes, goals, library, agent panel, and settings. The phone provides a native assistant entry point, conversational voice with interruption/cancellation, and screen context only through explicit user permission and supported Android capture. Show microphone/capture state, honor protected screens and revocation, and keep sensitive credential entry outside model-visible context. Direct Muse Android inspection must establish the target voice and screen interactions before claiming parity. Use native modules for secure storage, notifications, alarm/timer intents, audio controls where permitted, and default-assistant registration.
 
 Power-button invocation depends on the phone manufacturer and user-selected assistant settings. Validate on the user's Nothing Phone as well as an emulator. Do not equate a passing emulator test with support for every OEM. Launching Clock, requesting an alarm, and proving an alarm exists are different states and must be reported honestly.
 

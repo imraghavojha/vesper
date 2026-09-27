@@ -119,7 +119,7 @@ Do not inherit T3's component picker or its relaxed preview preferences. Transla
 - Malicious-page, restricted-worker-access, secret-redaction and authorization tests pass.
 - Required Muse screens, animations, accessibility and reduced motion pass on both clients, including a real Nothing Phone check and the month-end calendar journey.
 
-These are release requirements, not claims that software cannot fail. No application/backend has been implemented or passed these gates in this research phase.
+These are release requirements, not claims that software cannot fail. The initial Mac/browser workspace implementation does not satisfy the complete release gates. See the current implementation and evidence limits in `HANDOFF.md` and `docs/development.md`.
 
 ## Sources
 
