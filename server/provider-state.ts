@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { MAX_PROVIDER_TEXT_LENGTH } from "../shared/providers.js";
 import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { transaction } from "./transaction.js";
@@ -346,7 +347,7 @@ export function createProviderState(
       );
     },
     updateProviderText(id: string, text: string) {
-      if (text.length > 50000)
+      if (text.length > MAX_PROVIDER_TEXT_LENGTH)
         throw new Error("Provider output exceeded the text limit.");
       const updated = transaction(db, () => {
         const result = db
@@ -388,11 +389,13 @@ export function createProviderState(
           terminal.selection.modelId !== current.selection.modelId
         )
           throw new Error("Provider terminal identity mismatch.");
+        if (terminal.text.length > MAX_PROVIDER_TEXT_LENGTH)
+          throw new Error("Provider terminal exceeded the text limit.");
         db.prepare(
           "UPDATE provider_runs SET status=?,text=?,nativeSessionId=COALESCE(?,nativeSessionId),usageJson=?,error=?,completedAt=?,receipt=?,revision=revision+1 WHERE id=?",
         ).run(
           terminal.status,
-          terminal.text.slice(0, 50000),
+          terminal.text,
           terminal.nativeSessionId ?? null,
           terminal.usage ? JSON.stringify(terminal.usage) : null,
           terminal.error?.message ?? null,

@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { MAX_PROVIDER_TEXT_LENGTH } from "../shared/providers.js";
 import type { Store } from "./store.js";
 import type {
   ChatProvider,
@@ -22,6 +23,7 @@ export function createProviderRuntime(store: Store, adapter: ChatProvider) {
     const validateTerminal = (result: ProviderTerminal) => {
       if (
         result.runId !== id ||
+        result.text.length > MAX_PROVIDER_TEXT_LENGTH ||
         result.selection.provider !== run.selection.provider ||
         result.selection.accountId !== run.selection.accountId ||
         result.selection.modelId !== run.selection.modelId ||
@@ -68,6 +70,8 @@ export function createProviderRuntime(store: Store, adapter: ChatProvider) {
         } else if (event.kind === "text") {
           if (!initialized)
             throw new Error("Provider text arrived before initialization.");
+          if (event.text.length > MAX_PROVIDER_TEXT_LENGTH)
+            throw new Error("Provider output exceeded the text limit.");
           text = event.text;
           queuedText = text;
           if (!flushTimer)
@@ -106,7 +110,7 @@ export function createProviderRuntime(store: Store, adapter: ChatProvider) {
         runId: id,
         selection: run.selection,
         status: "failed",
-        text: text.slice(0, 50000),
+        text: text.slice(0, MAX_PROVIDER_TEXT_LENGTH),
         error: {
           code: "internal",
           message:

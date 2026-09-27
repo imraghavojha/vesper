@@ -2,6 +2,7 @@ import type {
   ProviderSelection,
   ProviderUsage,
 } from "../server/providers/contract.js";
+export const MAX_PROVIDER_TEXT_LENGTH = 50000;
 export type ProviderBinding = ProviderSelection & { revision: number };
 export type RunStatus =
   | "queued"

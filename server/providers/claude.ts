@@ -10,6 +10,7 @@ import { createHash } from "node:crypto";
 import { chmodSync, lstatSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
 import { join, resolve } from "node:path";
+import { MAX_PROVIDER_TEXT_LENGTH } from "../../shared/providers.js";
 import type {
   ChatProvider,
   ClaudeAdapterOptions,
@@ -475,12 +476,13 @@ export function createClaudeAdapter(
       }
     }
     function publishText() {
-      text = [...parts.values()].join("\n\n");
-      if (text.length > 131072)
+      const nextText = [...parts.values()].join("\n\n");
+      if (nextText.length > MAX_PROVIDER_TEXT_LENGTH)
         throw new ProviderFailure(
           "quota-exceeded",
           "Claude exceeded this run's response-size limit.",
         );
+      text = nextText;
       events.push({ kind: "text", runId, text });
     }
     function requireInit() {
@@ -628,15 +630,19 @@ export function createClaudeAdapter(
         if (
           message.subtype === "success" &&
           !message.is_error &&
+          message.result.length > MAX_PROVIDER_TEXT_LENGTH
+        )
+          throw new ProviderFailure(
+            "quota-exceeded",
+            "Claude response exceeded the size limit.",
+          );
+        if (
+          message.subtype === "success" &&
+          !message.is_error &&
           !text &&
           message.result
         ) {
           text = message.result;
-          if (text.length > 131072)
-            throw new ProviderFailure(
-              "quota-exceeded",
-              "Claude response exceeded the size limit.",
-            );
           events.push({ kind: "text", runId, text });
         }
         return true;

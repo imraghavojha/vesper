@@ -62,6 +62,8 @@ export function ConversationScreen({
   }
   const snapshot = sync.snapshot;
   const activeId = selected ?? snapshot?.conversationId;
+  const activeSnapshot =
+    snapshot?.conversationId === activeId ? snapshot : null;
   const conversation = snapshot?.conversations.find(
     (item) => item.id === activeId,
   );
@@ -78,7 +80,8 @@ export function ConversationScreen({
     }
   }
   async function selectProvider(modelId: string | null) {
-    if (!snapshot || !activeId || (modelId && !availability?.account)) return;
+    if (!activeSnapshot || !activeId || (modelId && !availability?.account))
+      return;
     await mutate(() =>
       sync.api.bindProvider.mutate({
         requestId: crypto.randomUUID(),
@@ -90,7 +93,7 @@ export function ConversationScreen({
               modelId,
             }
           : null,
-        expectedRevision: snapshot.providerBindingRevision,
+        expectedRevision: activeSnapshot.providerBindingRevision,
       }),
     );
   }
@@ -451,19 +454,20 @@ export function ConversationScreen({
         </div>
         <h2>Vesper</h2>
         <ProviderPanel
+          key={connection.workspaceId + ":" + activeId}
           availability={availability}
-          selection={snapshot?.providerBinding ?? null}
-          run={snapshot?.providerRun ?? null}
-          busy={busy || !sync.online}
+          selection={activeSnapshot?.providerBinding ?? null}
+          run={activeSnapshot?.providerRun ?? null}
+          busy={busy || !sync.online || !activeSnapshot}
           loading={providerLoading}
           error={providerError}
           onRefresh={() => void refreshProvider()}
           onSelect={(modelId) => void selectProvider(modelId)}
           onCancel={() => {
-            if (snapshot?.providerRun)
+            if (activeSnapshot?.providerRun)
               void mutate(() =>
                 sync.api.cancelProviderRun.mutate({
-                  id: snapshot.providerRun!.id,
+                  id: activeSnapshot.providerRun!.id,
                 }),
               );
           }}
