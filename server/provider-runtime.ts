@@ -22,6 +22,9 @@ export function createProviderRuntime(store: Store, adapter: ChatProvider) {
     const validateTerminal = (result: ProviderTerminal) => {
       if (
         result.runId !== id ||
+        result.selection.provider !== run.selection.provider ||
+        result.selection.accountId !== run.selection.accountId ||
+        result.selection.modelId !== run.selection.modelId ||
         ((result.status === "completed" || result.text.length > 0) &&
           !initialized)
       )
@@ -146,7 +149,12 @@ export function createProviderRuntime(store: Store, adapter: ChatProvider) {
         });
       const receipt = await handle.cancel();
       const saved = store.providerRun(id);
-      if (receipt.runId !== id)
+      if (
+        receipt.runId !== id ||
+        receipt.selection.provider !== current.selection.provider ||
+        receipt.selection.accountId !== current.selection.accountId ||
+        receipt.selection.modelId !== current.selection.modelId
+      )
         throw new Error("Provider cancellation run mismatch.");
       if (
         !["queued", "initializing", "running", "cancelling"].includes(

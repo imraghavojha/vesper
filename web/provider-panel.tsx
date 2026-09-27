@@ -23,6 +23,7 @@ type DraftState = {
   key: string;
   account: string | null;
   draft: string;
+  edited: boolean;
 };
 
 const ACTIVE_STATUSES: ReadonlySet<RunStatus> = new Set<RunStatus>([
@@ -79,16 +80,6 @@ function syncKey(
   ]);
 }
 
-// Only carry a saved model into the draft when it belongs to the discovered account.
-function initialDraft(
-  selection: ProviderBinding | null,
-  account: string | null,
-): string {
-  if (!selection || account === null || selection.accountId !== account)
-    return "";
-  return selection.modelId;
-}
-
 function UsageList({ usage }: { usage: Usage }) {
   const rows: Array<[string, string]> = [];
   if (isCount(usage.inputTokens))
@@ -143,27 +134,26 @@ export function ProviderPanel({
     return {
       key: syncKey(selection, account),
       account,
-      draft: initialDraft(selection, account),
+      draft: selection?.modelId ?? "",
+      edited: false,
     };
   });
-  const trackedAccount =
-    availability === null
-      ? draftState.account
-      : (discoveredAccount?.id ?? null);
+  const trackedAccount = discoveredAccount?.id ?? draftState.account;
   const key = syncKey(selection, trackedAccount);
   let current = draftState;
   if (key !== draftState.key) {
     current = {
       key,
       account: trackedAccount,
-      draft: initialDraft(selection, trackedAccount),
+      draft: selection?.modelId ?? "",
+      edited: false,
     };
     setDraftState(current);
   }
 
-  const draft = models.some((model) => model.id === current.draft)
-    ? current.draft
-    : "";
+  // Missing discovery cannot turn a saved provider binding into a disconnect.
+  const draft = current.draft;
+  const draftAvailable = models.some((model) => model.id === draft);
   const active = run !== null && ACTIVE_STATUSES.has(run.status);
   const accountChanged =
     selection !== null &&
@@ -172,10 +162,13 @@ export function ProviderPanel({
   const unchanged =
     selection === null
       ? draft === ""
-      : !accountChanged &&
-        discoveredAccount !== undefined &&
-        draft === selection.modelId;
-  const applyDisabled = busy || loading || active || unchanged;
+      : !accountChanged && draft === selection.modelId;
+  const applyDisabled =
+    busy ||
+    loading ||
+    active ||
+    unchanged ||
+    (draft === "" ? !current.edited : !draftAvailable);
   const savedModelLabel = selection
     ? (models.find((model) => model.id === selection.modelId)?.label ??
       selection.modelId)
@@ -266,11 +259,20 @@ export function ProviderPanel({
           className="provider-panel__select"
           value={draft}
           onChange={(event) =>
-            setDraftState((state) => ({ ...state, draft: event.target.value }))
+            setDraftState((state) => ({
+              ...state,
+              draft: event.target.value,
+              edited: true,
+            }))
           }
           disabled={busy || loading || active}
         >
           <option value="">Save only (no provider)</option>
+          {draft !== "" && !draftAvailable ? (
+            <option value={draft} disabled>
+              {draft} ({availability === null ? "not checked" : "unavailable"})
+            </option>
+          ) : null}
           {models.map((model) => (
             <option key={model.id} value={model.id}>
               {model.label}
