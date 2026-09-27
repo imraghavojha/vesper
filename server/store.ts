@@ -72,7 +72,7 @@ export function openStore(directory: string, expectedWorkspaceId?: string) {
   const schema = db.prepare("SELECT version FROM schema_version").get() as {
     version: number;
   };
-  if (![1, 2].includes(schema.version))
+  if (![1, 2, 3].includes(schema.version))
     throw new Error(
       "Unsupported database version. Use a compatible Vesper host.",
     );

@@ -1,4 +1,5 @@
 import type { Draft } from "../shared/sync.js";
+import type { AskIntent } from "../shared/providers.js";
 const prefix = "vesper.draft.v1:";
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type Cell = {
@@ -12,6 +13,57 @@ function key(workspaceId: string, conversationId: string) {
   if (!uuid.test(workspaceId) || !uuid.test(conversationId))
     throw new Error("Invalid draft scope.");
   return prefix + workspaceId + ":" + conversationId;
+}
+function exactObject(
+  value: unknown,
+  keys: string[],
+): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value))
+    return false;
+  const prototype = Object.getPrototypeOf(value);
+  return (
+    (prototype === Object.prototype || prototype === null) &&
+    Object.keys(value).length === keys.length &&
+    keys.every((name) => Object.hasOwn(value, name))
+  );
+}
+function providerId(value: unknown): value is string {
+  return (
+    typeof value === "string" && value.trim().length > 0 && value.length <= 128
+  );
+}
+function validateProvider(value: unknown): AskIntent {
+  if (
+    !exactObject(value, ["selection", "bindingRevision"]) ||
+    typeof value.bindingRevision !== "number" ||
+    !Number.isSafeInteger(value.bindingRevision) ||
+    value.bindingRevision <= 0 ||
+    !exactObject(value.selection, ["provider", "accountId", "modelId"]) ||
+    value.selection.provider !== "claude" ||
+    !providerId(value.selection.accountId) ||
+    !providerId(value.selection.modelId)
+  )
+    throw new Error("Saved pending provider is invalid.");
+  return {
+    selection: {
+      provider: "claude",
+      accountId: value.selection.accountId,
+      modelId: value.selection.modelId,
+    },
+    bindingRevision: value.bindingRevision,
+  };
+}
+function sameProvider(
+  left: AskIntent | undefined,
+  right: AskIntent | undefined,
+) {
+  if (left === undefined || right === undefined) return left === right;
+  return (
+    left.bindingRevision === right.bindingRevision &&
+    left.selection.provider === right.selection.provider &&
+    left.selection.accountId === right.selection.accountId &&
+    left.selection.modelId === right.selection.modelId
+  );
 }
 function validate(value: unknown): Draft {
   if (
@@ -37,7 +89,13 @@ function validate(value: unknown): Draft {
       candidate.text.length > 10000
     )
       throw new Error("Saved pending message is invalid.");
-    pending = { requestId: candidate.requestId, text: candidate.text };
+    pending = {
+      requestId: candidate.requestId,
+      text: candidate.text,
+      ...("provider" in candidate
+        ? { provider: validateProvider(candidate.provider) }
+        : {}),
+    };
   }
   return { text: value.text, pending };
 }
@@ -81,7 +139,8 @@ export async function loadDraft(
         ? stored.pending === null
         : stored.pending !== null &&
           latest.pending.requestId === stored.pending.requestId &&
-          latest.pending.text === stored.pending.text);
+          latest.pending.text === stored.pending.text &&
+          sameProvider(latest.pending.provider, stored.pending.provider));
     if (matches) state.acknowledged = revision;
     return { draft: validate(latest), saved: matches };
   }

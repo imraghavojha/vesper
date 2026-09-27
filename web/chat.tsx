@@ -13,6 +13,9 @@ import {
   createConversationRequestHash,
 } from "../shared/sync.js";
 import { loadDraft, saveDraft } from "./draft-storage.js";
+import { ProviderPanel } from "./provider-panel.js";
+import type { ProviderAvailability } from "../server/providers/contract.js";
+import { askRequestHash } from "../shared/sync.js";
 import "./chat.css";
 
 type Saved = Connection & { workspaceId: string; mode?: "local" | "remote" };
@@ -44,6 +47,12 @@ export function ConversationScreen({
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [availability, setAvailability] = useState<ProviderAvailability | null>(
+    null,
+  );
+  const [providerLoading, setProviderLoading] = useState(false);
+  const [providerError, setProviderError] = useState("");
+  const [providerOpen, setProviderOpen] = useState(false);
   const formRequest = useRef<{ id: string; fingerprint: string } | null>(null);
   function requestFor(operation: string, payload: unknown) {
     const fingerprint = JSON.stringify([operation, payload]);
@@ -57,6 +66,34 @@ export function ConversationScreen({
     (item) => item.id === activeId,
   );
   const appearance = snapshot?.settings.appearance;
+  async function refreshProvider() {
+    setProviderLoading(true);
+    setProviderError("");
+    try {
+      setAvailability(await sync.api.providerAvailability.query());
+    } catch (cause) {
+      setProviderError(syncError(cause));
+    } finally {
+      setProviderLoading(false);
+    }
+  }
+  async function selectProvider(modelId: string | null) {
+    if (!snapshot || !activeId || (modelId && !availability?.account)) return;
+    await mutate(() =>
+      sync.api.bindProvider.mutate({
+        requestId: crypto.randomUUID(),
+        conversationId: activeId,
+        selection: modelId
+          ? {
+              provider: "claude",
+              accountId: availability!.account!.id,
+              modelId,
+            }
+          : null,
+        expectedRevision: snapshot.providerBindingRevision,
+      }),
+    );
+  }
   useEffect(() => {
     if (appearance) document.documentElement.dataset.appearance = appearance;
   }, [appearance]);
@@ -351,7 +388,9 @@ export function ConversationScreen({
         <div className="conversation-heading">
           <div>
             <h1>{conversation?.title ?? "Your conversations"}</h1>
-            <span>No provider connected</span>
+            <span>
+              {snapshot?.providerBinding?.modelId ?? "No provider connected"}
+            </span>
           </div>
           <button
             aria-label="Rename conversation"
@@ -369,6 +408,12 @@ export function ConversationScreen({
             }}
           >
             Rename
+          </button>
+          <button
+            className="provider-toggle"
+            onClick={() => setProviderOpen(!providerOpen)}
+          >
+            Provider
           </button>
         </div>
         {(sync.error || error) && (
@@ -394,19 +439,35 @@ export function ConversationScreen({
           </div>
         )}
       </main>
-      <aside className="chat-agent">
+      <aside className={"chat-agent" + (providerOpen ? " provider-open" : "")}>
+        <button
+          className="provider-toggle"
+          onClick={() => setProviderOpen(false)}
+        >
+          Close provider panel
+        </button>
         <div className="agent-placeholder" aria-hidden="true">
           v
         </div>
         <h2>Vesper</h2>
-        <p className="agent-state">No provider connected</p>
-        <div className="agent-info">
-          <h3>Your messages are saved</h3>
-          <p>
-            This workspace stores your messages and side chats. No agent is
-            connected yet, so saving a message does not start an agent.
-          </p>
-        </div>
+        <ProviderPanel
+          availability={availability}
+          selection={snapshot?.providerBinding ?? null}
+          run={snapshot?.providerRun ?? null}
+          busy={busy || !sync.online}
+          loading={providerLoading}
+          error={providerError}
+          onRefresh={() => void refreshProvider()}
+          onSelect={(modelId) => void selectProvider(modelId)}
+          onCancel={() => {
+            if (snapshot?.providerRun)
+              void mutate(() =>
+                sync.api.cancelProviderRun.mutate({
+                  id: snapshot.providerRun!.id,
+                }),
+              );
+          }}
+        />
         <section className="appearance">
           <h3>Appearance</h3>
           <div role="group" aria-label="Shared appearance">
@@ -596,9 +657,16 @@ function ConversationBody({
       });
       if (!mounted.current) return;
       const matches =
-        receipt?.operation === "sendMessage" &&
+        receipt?.operation ===
+          (pending.provider ? "askProvider" : "sendMessage") &&
         receipt.payloadHash ===
-          (await messageRequestHash(conversationId, pending.text));
+          (pending.provider
+            ? await askRequestHash(
+                conversationId,
+                pending.text,
+                pending.provider,
+              )
+            : await messageRequestHash(conversationId, pending.text));
       if (!mounted.current) return;
       if (matches) {
         await acknowledge(pending.requestId);
@@ -622,22 +690,48 @@ function ConversationBody({
     checkReceipt,
   ]);
   async function send(retry = false) {
-    if (!ready || !sync.online || sending || draftError) return;
+    if (
+      !ready ||
+      !sync.online ||
+      sending ||
+      draftError ||
+      (!retry && replyActive)
+    )
+      return;
     const current = draftRef.current;
-    const pending = retry
+    const binding = sync.snapshot?.providerBinding;
+    const pending: Draft["pending"] = retry
       ? current.pending
-      : { requestId: crypto.randomUUID(), text: current.text };
+      : {
+          requestId: crypto.randomUUID(),
+          text: current.text,
+          ...(binding
+            ? {
+                provider: {
+                  selection: {
+                    provider: binding.provider,
+                    accountId: binding.accountId,
+                    modelId: binding.modelId,
+                  },
+                  bindingRevision: binding.revision,
+                },
+              }
+            : {}),
+        };
     if (!pending || !pending.text.trim() || (!retry && current.pending)) return;
     setSending(true);
     setSendError("");
     try {
       await queue.current;
       await persist({ ...draftRef.current, pending });
-      await sync.api.sendMessage.mutate({
+      const input = {
         requestId: pending.requestId,
         conversationId,
         text: pending.text,
-      });
+      };
+      if (pending.provider)
+        await sync.api.askProvider.mutate({ ...input, ...pending.provider });
+      else await sync.api.sendMessage.mutate(input);
       if (mounted.current) {
         await acknowledge(pending.requestId);
         await sync.refresh();
@@ -646,8 +740,21 @@ function ConversationBody({
       if (
         mounted.current &&
         draftRef.current.pending?.requestId === pending.requestId
-      )
+      ) {
         setSendError(syncError(cause));
+        if (
+          !retry &&
+          cause instanceof TRPCClientError &&
+          [
+            "BAD_REQUEST",
+            "NOT_FOUND",
+            "CONFLICT",
+            "TOO_MANY_REQUESTS",
+            "UNAUTHORIZED",
+          ].includes(cause.data?.code)
+        )
+          await persist({ ...draftRef.current, pending: null }).catch(() => {});
+      }
     } finally {
       if (mounted.current) setSending(false);
     }
@@ -679,6 +786,13 @@ function ConversationBody({
     }
   }
   const pending = draft.pending;
+  const binding = sync.snapshot?.providerBinding;
+  const replyActive = [
+    "queued",
+    "initializing",
+    "running",
+    "cancelling",
+  ].includes(sync.snapshot?.providerRun?.status ?? "");
   return (
     <>
       <div
@@ -706,22 +820,37 @@ function ConversationBody({
           <div className="chat-empty">
             <h2>Your conversation starts here</h2>
             <p>
-              Write a message to save it in this workspace.
-              <br />
-              No agent is connected, so no reply or action will run.
+              {binding
+                ? "Send a message to the selected Claude account. This connection supports chat only."
+                : "Write a message to save it in this workspace, or select a provider for replies."}
             </p>
           </div>
         )}
         {messages.map((message) => (
           <article className={"message " + message.role} key={message.id}>
-            <div className="message-text">{message.text}</div>
+            <div className="message-text">
+              {message.text ||
+                (message.role === "assistant"
+                  ? [
+                      "completed",
+                      "cancelled",
+                      "failed",
+                      "interrupted",
+                    ].includes(message.status ?? "")
+                    ? "No reply text was received."
+                    : "Waiting for provider…"
+                  : "")}
+            </div>
             <small>
               {message.role === "user" ? "You" : "Assistant"} ·{" "}
               {new Date(message.createdAt).toLocaleTimeString([], {
                 hour: "2-digit",
                 minute: "2-digit",
               })}{" "}
-              · Saved
+              ·{" "}
+              {message.role === "assistant"
+                ? (message.status ?? "completed")
+                : "Saved"}
             </small>
           </article>
         ))}
@@ -794,11 +923,16 @@ function ConversationBody({
             }}
           />
           <button
-            aria-label="Save message to workspace"
+            aria-label={
+              binding
+                ? "Send message to selected provider"
+                : "Save message to workspace"
+            }
             disabled={
               !ready ||
               !sync.online ||
               sending ||
+              replyActive ||
               !!pending ||
               !draft.text.trim() ||
               !!draftError
@@ -810,7 +944,11 @@ function ConversationBody({
         </form>
         <div className="composer-status">
           <span role="status">{savedState}</span>
-          <span>Messages are saved. No provider is connected.</span>
+          <span>
+            {binding
+              ? "Chat only · no tools or external actions"
+              : "Messages are saved. No provider is connected."}
+          </span>
         </div>
       </div>
     </>

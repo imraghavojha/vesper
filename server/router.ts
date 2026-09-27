@@ -1,7 +1,12 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
 import type { Store, Device } from "./store.js";
-export type Context = { store: Store; device: Device | null };
+import type { ProviderRuntime } from "./provider-runtime.js";
+export type Context = {
+  store: Store;
+  device: Device | null;
+  providers: ProviderRuntime;
+};
 const t = initTRPC.context<Context>().create({
   errorFormatter({ shape }) {
     return { ...shape, data: { ...shape.data, stack: undefined } };
@@ -16,7 +21,75 @@ const authenticated = t.procedure.use(({ ctx, next }) => {
     });
   return next({ ctx: { ...ctx, device: ctx.device } });
 });
+const selection = z
+  .object({
+    provider: z.literal("claude"),
+    accountId: z.string().min(1).max(128),
+    modelId: z.string().min(1).max(128),
+  })
+  .strict();
 export const appRouter = t.router({
+  providerAvailability: authenticated.query(({ ctx }) =>
+    ctx.providers.discover(),
+  ),
+  bindProvider: authenticated
+    .input(
+      z
+        .object({
+          requestId: z.string().uuid(),
+          conversationId: z.string().uuid(),
+          selection: selection.nullable(),
+          expectedRevision: z.number().int().min(0),
+        })
+        .strict(),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (input.selection) {
+        const available = await ctx.providers.discover();
+        if (
+          available.status !== "available" ||
+          available.account?.id !== input.selection.accountId ||
+          !available.models.some(
+            (model) => model.id === input.selection!.modelId,
+          )
+        )
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              available.reason ??
+              "Refresh the available account and model before connecting.",
+          });
+      }
+      return ctx.store.bindProvider(ctx.device.id, input);
+    }),
+  askProvider: authenticated
+    .input(
+      z
+        .object({
+          requestId: z.string().uuid(),
+          conversationId: z.string().uuid(),
+          text: z
+            .string()
+            .min(1)
+            .max(10000)
+            .refine((value) => value.trim().length > 0),
+          selection,
+          bindingRevision: z.number().int().positive(),
+        })
+        .strict(),
+    )
+    .mutation(({ ctx, input }) => {
+      const receipt = ctx.store.askProvider(ctx.device.id, input);
+      ctx.providers.start(receipt.id);
+      return receipt;
+    }),
+  providerRun: authenticated
+    .input(z.object({ id: z.string().uuid() }))
+    .query(({ ctx, input }) => ctx.store.providerRun(input.id)),
+  cancelProviderRun: authenticated
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(({ ctx, input }) => ctx.providers.cancel(input.id)),
+
   syncSnapshot: authenticated
     .input(
       z.object({ conversationId: z.string().uuid().optional() }).default({}),
