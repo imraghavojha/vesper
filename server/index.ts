@@ -6,13 +6,23 @@ import { fileURLToPath } from "node:url";
 import { appRouter } from "./router.js";
 import { openStore } from "./store.js";
 
+type ManagedPort = {
+  postMessage(value: unknown): void;
+  on(event: "message", listener: (event: { data: unknown }) => void): void;
+};
+const parentPort = (process as typeof process & { parentPort?: ManagedPort })
+  .parentPort;
+const managed =
+  process.env.VESPER_MANAGED_LOCAL === "1" && parentPort !== undefined;
 const port = Number(process.env.VESPER_PORT ?? 4317);
-const address = process.env.VESPER_BIND ?? "127.0.0.1";
+const address = managed
+  ? "127.0.0.1"
+  : (process.env.VESPER_BIND ?? "127.0.0.1");
 const store = openStore(resolve(process.env.VESPER_DATA_DIR ?? ".vesper"));
 const allowedOrigins = new Set(
   (
     process.env.VESPER_ALLOWED_ORIGINS ??
-    `http://127.0.0.1:${port},http://localhost:${port},http://127.0.0.1:5177,http://localhost:5177`
+    `http://127.0.0.1:${port},http://localhost:${port},http://127.0.0.1:5177,http://localhost:5177,vesper://app`
   )
     .split(",")
     .map((s) => s.trim()),
@@ -115,9 +125,75 @@ const server = createServer(async (req, res) => {
 });
 server.requestTimeout = 15_000;
 server.headersTimeout = 10_000;
-server.listen(port, address, () =>
-  console.info(`Vesper host listening on ${address}:${port}`),
-);
+let actualPort = port;
+server.listen(port, address, () => {
+  const bound = server.address();
+  if (!bound || typeof bound === "string")
+    throw new Error("Host did not bind a TCP port.");
+  actualPort = bound.port;
+  allowedOrigins.add(`http://127.0.0.1:${actualPort}`);
+  allowedOrigins.add(`http://localhost:${actualPort}`);
+  console.info(`Vesper host listening on ${address}:${actualPort}`);
+  if (managed)
+    parentPort.postMessage({
+      type: "host-ready",
+      port: actualPort,
+      workspaceId: store.identity().id,
+    });
+});
+server.on("error", (error: NodeJS.ErrnoException) => {
+  if (managed)
+    parentPort.postMessage({
+      type: "host-error",
+      code: error.code ?? "START_FAILED",
+      message: "Local workspace could not start.",
+    });
+  else
+    console.error(
+      `Vesper host could not start (${error.code ?? "unknown error"}).`,
+    );
+  store.close();
+  if (managed) setImmediate(() => process.exit(1));
+  else process.exitCode = 1;
+});
+if (managed)
+  parentPort.on("message", ({ data }) => {
+    if (!data || typeof data !== "object" || !("type" in data)) return;
+    if (data.type === "shutdown") {
+      shutdown();
+      return;
+    }
+    if (
+      data.type !== "bootstrap" ||
+      !("requestId" in data) ||
+      typeof data.requestId !== "string" ||
+      !/^[0-9a-f-]{36}$/i.test(data.requestId)
+    )
+      return;
+    try {
+      const code = store.createPairingCode().code;
+      const connection = store.pair({
+        code,
+        name: "This Mac",
+        platform: "mac",
+      });
+      parentPort.postMessage({
+        type: "bootstrap-result",
+        requestId: data.requestId,
+        connection: {
+          url: `http://127.0.0.1:${actualPort}`,
+          token: connection.token,
+          workspaceId: connection.workspaceId,
+        },
+      });
+    } catch {
+      parentPort.postMessage({
+        type: "bootstrap-error",
+        requestId: data.requestId,
+        message: "Local device connection could not be created. Try again.",
+      });
+    }
+  });
 function shutdown() {
   server.close(() => {
     store.close();

@@ -1,6 +1,5 @@
 FROM node:24.21.0-bookworm-slim AS build
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
 ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 COPY package.json package-lock.json ./
 RUN npm ci

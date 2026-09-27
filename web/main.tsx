@@ -17,12 +17,27 @@ import { normalizeHost, type Connection } from "../shared/connection.js";
 import "./style.css";
 
 const STORAGE_KEY = "vesper.connection.v1";
-type SavedConnection = Connection & { workspaceId: string };
+type SavedConnection = Connection & {
+  workspaceId: string;
+  mode?: "local" | "remote";
+};
+type LocalHostStatus = {
+  state: "stopped" | "starting" | "running" | "failed";
+  message?: string;
+};
 declare global {
   interface Window {
     vesperDesktop?: {
       loadConnection(): Promise<SavedConnection | null>;
       saveConnection(value: SavedConnection | null): Promise<void>;
+      createLocalWorkspace(): Promise<SavedConnection>;
+      localHostStatus(): Promise<LocalHostStatus>;
+      onLocalHostStatus(
+        callback: (status: LocalHostStatus) => void,
+      ): () => void;
+      onConnectionChanged(
+        callback: (connection: SavedConnection) => void,
+      ): () => void;
     };
   }
 }
@@ -47,6 +62,7 @@ async function loadConnection(): Promise<SavedConnection | null> {
     url: normalizeHost(saved.url),
     token: saved.token,
     workspaceId: saved.workspaceId,
+    mode: "mode" in saved && saved.mode === "local" ? "local" : "remote",
   };
 }
 async function persistConnection(next: SavedConnection | null) {
@@ -94,6 +110,10 @@ function Brand() {
 function App() {
   const [connection, setConnection] = useState<SavedConnection | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [remoteSetup, setRemoteSetup] = useState(false);
+  const [localStatus, setLocalStatus] = useState<LocalHostStatus>({
+    state: "stopped",
+  });
   const [storageError, setStorageError] = useState("");
   useEffect(() => {
     let active = true;
@@ -114,6 +134,23 @@ function App() {
       active = false;
     };
   }, []);
+  useEffect(() => {
+    const bridge = window.vesperDesktop;
+    if (!bridge) return;
+    void bridge
+      .localHostStatus()
+      .then(setLocalStatus)
+      .catch(() => {});
+    const unsubscribeStatus = bridge.onLocalHostStatus(setLocalStatus);
+    const unsubscribeConnection = bridge.onConnectionChanged((next) => {
+      queries.clear();
+      setConnection(next);
+    });
+    return () => {
+      unsubscribeStatus();
+      unsubscribeConnection();
+    };
+  }, []);
   async function save(next: SavedConnection | null) {
     try {
       await persistConnection(next);
@@ -125,6 +162,7 @@ function App() {
     }
     queries.clear();
     setConnection(next);
+    if (!next) setRemoteSetup(false);
   }
   const forgetRevoked = useCallback(async () => {
     try {
@@ -146,6 +184,12 @@ function App() {
           {storageError}
         </p>
       )}
+      {localStatus.state === "failed" &&
+        (connection?.mode === "local" || !connection) && (
+          <p className="banner" role="alert">
+            {localStatus.message ?? "The local workspace could not start."}
+          </p>
+        )}
       {!loaded ? (
         <main className="workspace">
           <p role="status">Opening your saved connection…</p>
@@ -156,8 +200,15 @@ function App() {
           disconnect={() => save(null)}
           onRevoked={forgetRevoked}
         />
+      ) : window.vesperDesktop && !remoteSetup ? (
+        <Welcome onConnect={save} onRemote={() => setRemoteSetup(true)} />
       ) : (
-        <Pair onConnect={save} />
+        <Pair
+          onConnect={save}
+          onBack={
+            window.vesperDesktop ? () => setRemoteSetup(false) : undefined
+          }
+        />
       )}
       <footer>
         Vesper · Workspace preview <span>One shared host. Your devices.</span>
@@ -165,13 +216,95 @@ function App() {
     </>
   );
 }
-function Pair({
+function Welcome({
   onConnect,
+  onRemote,
 }: {
   onConnect: (value: SavedConnection) => Promise<void>;
+  onRemote: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function openLocal() {
+    setBusy(true);
+    setError("");
+    try {
+      await onConnect(await window.vesperDesktop!.createLocalWorkspace());
+    } catch {
+      setError(
+        "The local workspace could not open. Check that storage and device encryption are available, then try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <main className="workspace welcome">
+      <p className="eyebrow">Welcome to Vesper</p>
+      <h1>Your workspace, your way.</h1>
+      <p className="lead">
+        Start on this Mac. You do not need a phone, a separate server, or a
+        terminal.
+      </p>
+      <div className="workspace-grid">
+        <section className="card">
+          <h2>On this Mac</h2>
+          <p className="muted">
+            Create a private workspace here, or reopen the one already saved on
+            this Mac.
+          </p>
+          <button
+            className="primary"
+            disabled={busy}
+            onClick={() => void openLocal()}
+          >
+            {busy ? "Opening workspace…" : "Start on this Mac"}
+          </button>
+          <p className="field-help">
+            Your data stays on this Mac. Local work pauses when you quit Vesper
+            or the Mac is off.
+          </p>
+        </section>
+        <section className="card">
+          <h2>Connect to a workspace</h2>
+          <p className="muted">
+            Pair this Mac with an existing Vesper host using its address and a
+            one-time code.
+          </p>
+          <button disabled={busy} onClick={onRemote}>
+            Connect to existing host
+          </button>
+          <p className="field-help">
+            An independent host can remain available while this Mac is off.
+          </p>
+        </section>
+      </div>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+      <p className="scope-note">
+        This release sets up your workspace and devices. Chats, voice, agents,
+        account connections and Android are still being built. This setup screen
+        is temporary.
+      </p>
+    </main>
+  );
+}
+function Pair({
+  onConnect,
+  onBack,
+}: {
+  onConnect: (value: SavedConnection) => Promise<void>;
+  onBack?: () => void;
 }) {
   const [host, setHost] = useState(
-    location.port === "5177" ? "http://127.0.0.1:4317" : location.origin,
+    window.vesperDesktop
+      ? ""
+      : location.port === "5177"
+        ? "http://127.0.0.1:4317"
+        : location.origin,
   );
   const [name, setName] = useState(
     window.vesperDesktop ? "My Mac" : "My browser",
@@ -210,6 +343,11 @@ function Pair({
   return (
     <main className="setup">
       <section className="intro">
+        {onBack && (
+          <button className="text-button" onClick={onBack}>
+            ← Back
+          </button>
+        )}
         <p className="eyebrow">A place for everything</p>
         <h1>
           Make yourself
@@ -433,7 +571,11 @@ function Workspace({
           <dl>
             <div>
               <dt>Host</dt>
-              <dd>{data?.host.availability ?? "Waiting for host"}</dd>
+              <dd>
+                {connection.mode === "local"
+                  ? "This Mac · Local workspace"
+                  : (data?.host.availability ?? "Waiting for host")}
+              </dd>
             </div>
             <div>
               <dt>This device</dt>
@@ -516,8 +658,9 @@ function Workspace({
             background model work runs in this preview.
           </p>
           <div className="small-note">
-            A host on this Mac goes offline when the Mac shuts down. Use an
-            independent host for availability across devices.
+            {connection.mode === "local"
+              ? "This workspace runs on your Mac and is accessible only from this Mac. Quitting Vesper or turning off the Mac stops local work. No phone is required."
+              : "This device connects to a separate host. Its availability depends on that host staying online."}
           </div>
         </section>
         <section className="card devices">

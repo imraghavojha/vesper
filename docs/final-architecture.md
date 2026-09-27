@@ -1,12 +1,12 @@
 # Final architecture
 
-Vesper is a public, open-source Muse equivalent with interchangeable agent harnesses. The design prioritizes dependable behavior and maintainability, while avoiding unnecessary infrastructure. The user requires an independent shared host so Android and scheduled work continue when the Mac is off. Mac-only hosting and Mac-Keychain-only credential storage are rejected.
+Vesper is a public, open-source Muse equivalent with interchangeable agent harnesses. The design prioritizes dependable behavior and maintainability, while avoiding unnecessary infrastructure. The product supports an independent shared host so Android and scheduled work can continue when the Mac is off. A Mac-only user can also choose a managed local host with no phone or separate-server setup; this mode pauses work when the Mac is off. A separate process still owns the backend. Mac-Keychain-only storage for the shared vault remains rejected.
 
 This document is the architecture decision. [Code reuse research](architecture-and-reuse.md) records source findings and alternatives, not extra requirements. [Architecture review](architecture-review.md) records three discussions with Claude Opus 5.5. Linear issues describe what users get, not code structure or implementation steps.
 
 ## One independently hosted backend
 
-A Node/TypeScript backend runs on an always-on home server or ordinary self-hosted server. Mac and Android connect to the same workspace. The backend owns chats, goals, schedules, approvals, integration accounts and the encrypted vault. Provider runtimes and browser sessions run beside it as supervised workers, outside UI processes.
+A Node/TypeScript backend runs on an always-on home server or ordinary self-hosted server. Standalone Mac mode runs the same backend in a supervised Electron utility process; it uses local storage and remains loopback-only until explicitly supported remote exposure is implemented. Mac and Android connect to the same workspace. The backend owns chats, goals, schedules, approvals, integration accounts and the encrypted vault. Provider runtimes and browser sessions run beside it as supervised workers, outside UI processes.
 
 The first public release supports one owner and paired devices per deployment. Public release does not require a multi-tenant SaaS. Provide a documented container deployment without a Meta VM platform, Kubernetes, custom relay fleet or always-thinking model.
 

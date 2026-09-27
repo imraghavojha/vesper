@@ -1,39 +1,58 @@
 # Development
 
-The first application slice provides an authenticated shared workspace, a Mac client and a browser client. It does not implement chat, providers, connectors, schedules or Android. IMR-6 remains open until its remaining platform and independent-host acceptance is demonstrated.
+Vesper can open a local workspace on a Mac or connect to an independent host. Android is optional for Mac use. The current application handles workspace identity, device connections and shared workspace names. Chats, voice, notch/hotkey invocation, providers, connectors, schedules and Android are still being built. IMR-6 remains open for its remaining acceptance.
 
-## Run on Mac
+## Run the Mac app
 
-Use Node 24.21.0 from `.nvmrc` and the checked-in npm lockfile. TypeScript is pinned to 6.0.3 because the current TypeScript ESLint release supports TypeScript below 6.1. Version choices were checked against the npm registry on September 27, 2026.
+Use Node 24.21.0 from `.nvmrc` and the checked-in npm lockfile.
 
 ```sh
 nvm install
 nvm use
 npm ci
-npm run dev:server
+npm run build
+npm run desktop
 ```
 
-In another terminal, run `npm run dev:web`, then `npm run desktop`. The backend listens on `127.0.0.1:4317`, Vite on `127.0.0.1:5177`. Electron loads the web client and does not start or own the backend. Quitting Electron leaves the host running. Closing the host or shutting down this Mac makes a locally hosted workspace unavailable.
+No separate server command is needed. The bundled first-run screen offers **Start on this Mac** and **Connect to existing host**. Starting locally creates or reopens the Mac's private workspace. It launches the backend in a separate Electron utility process and pairs the desktop privately. Device tokens remain in operating-system-backed encrypted storage. A phone is not required.
 
-For the production web build, run `npm run build`, then `npm start`. Open `http://127.0.0.1:4317`. `NODE_ENV=production npm run desktop` uses this built client. Set `VESPER_DESKTOP_URL` to use another trusted HTTPS host in production mode. The desktop only permits its configured renderer origin and sends external HTTPS links to the system browser.
+Build a local application bundle with `npm run package:mac`. Open `release/Vesper-darwin-arm64/Vesper.app` on Apple Silicon, or the `x64` directory on an Intel Mac. Copy that app to your Applications directory to use it without Node, npm or a terminal. The package contains only application code and production dependencies; no workspace data or browser profiles are copied from the checkout. These local builds are unsigned and not notarized. Public signed installers and updates remain release work.
 
-The host creates `.vesper/workspace.sqlite` and an `initialized` marker. The marker prevents a missing database from silently becoming a new workspace. Keep both in backups. `VESPER_DATA_DIR` selects a different private data directory. Every worktree and verification run must use a separate directory and ports. `VESPER_PORT`, `VESPER_BIND`, `VESPER_HOST_LABEL` and comma-separated `VESPER_ALLOWED_ORIGINS` configure listening and browser access. Origin entries must exactly match the client origin, without a trailing slash.
+The Mac's application data lives in `~/Library/Application Support/Vesper`. Its managed backend uses the `local-host` subdirectory. `VESPER_DESKTOP_DATA_DIR` selects an isolated application directory for development or verification. Never point two test applications at one directory.
 
-## Pair devices
+Local mode listens only on loopback. The app saves the selected port and reuses it on relaunch. If another process occupies that port, Vesper launches its own worker on a fresh port, verifies the workspace identity and updates its encrypted connection. It never treats an unrelated existing listener as its host. Quitting the application stops the local backend. Closing the window on Mac leaves the app running. Turning off the Mac stops local work. The first slice does not run scheduled work yet.
 
-The initial host writes a random, one-use code to its private `pairing-code` file. Open that file locally, enter it in the client, and name the device. Codes expire in ten minutes. A connected client can create another code from its devices panel. A code grants full access to this single-owner workspace, so share it only with your own devices.
+A worker crash allows at most two automatic restart attempts per app lifetime. Existing device tokens are reused. Revoked tokens stay revoked; opening the local workspace again is an explicit owner recovery action. After the restart budget is exhausted, failure remains visible until the user retries. No restart or connection check invokes a model.
 
-A host operator can run `npm run pairing-code` to create a replacement code. With compiled production files, run `node dist/server/pairing.js`. Use the same `VESPER_DATA_DIR` as the running host. This recovers access after a lost device or interrupted first pairing without deleting the workspace. It does not revoke existing devices. Recovery publishes the private file through an atomic rename while holding the SQLite write transaction, so revocation cannot occur between code insertion and publication. A later device revocation still cancels the code normally. Revoke lost devices from the connected client afterwards.
+## Connect to an independent host
 
-Pairing atomically consumes the code and creates a device. The host stores only token/code hashes. Device revocation invalidates subsequent requests and atomically cancels every unused pairing code in this single-owner workspace. Create a new code after revoking a device; a code issued before revocation cannot restore access. Repeating the same completed revocation preserves codes created afterwards. Clients pin the workspace ID and refuse a different workspace at the same URL. Workspace renames carry an expected revision and reject stale edits. The first slice refreshes status every three seconds while visible; it is not the later durable event-stream sync implementation.
+The standalone backend remains deployable on ordinary Node 24.21.0. Run `npm run build`, then `npm start`. It serves the built web client on `http://127.0.0.1:4317` by default. For web development, `npm run dev:server` and `npm run dev:web` use ports 4317 and 5177. The Mac application uses its bundled renderer, not Vite or an externally hosted page.
 
-The Mac shell stores its device connection using Electron `safeStorage`, backed by the operating system. It fails to save if encryption is unavailable. Only its trusted top-level renderer can call the narrow load/save bridge. The renderer needs the token in memory for requests, so a compromised trusted renderer remains a risk. The browser preview retains its connection only in tab session storage. It survives reload, but does not promise persistence after the browser session ends. Neither client stores website passwords or third-party account tokens in this slice.
+Choose **Connect to existing host** in the Mac app and enter that host's address and pairing code. Remote hosts require HTTPS. An independent always-on host can stay available while the Mac is off. The current loopback-only local mode is for this Mac; use an independently reachable host for clients on other devices.
 
-Offline clients keep the last received status in memory and disable changes. A restarted offline client may have no cached workspace details. No approval or external write is queued offline. The host performs no background model calls.
+The host creates `.vesper/workspace.sqlite` and an `initialized` marker. Keep both in backups. The marker prevents a missing database from silently becoming a new workspace. `VESPER_DATA_DIR` selects another private directory. `VESPER_PORT`, `VESPER_BIND`, `VESPER_HOST_LABEL` and comma-separated `VESPER_ALLOWED_ORIGINS` configure listening and browser access. Origins must match exactly, without a trailing slash. Include `vesper://app` for the installed desktop and the host's HTTPS origin for its browser client.
 
-## Independent host
+## Runtime and SQLite
 
-Run the host on a separate always-on Linux machine to keep it available when the Mac is off. The container build uses the same lockfile and serves the built web client. The image runs as the unprivileged `node` user.
+Electron 44.4.5 and the independently hosted Node 24.21.0 both include Node's built-in SQLite 3.53.4. Vesper uses the common `node:sqlite` API, so the Mac app does not bundle a second Node runtime or rebuild a native SQLite addon for Electron's different ABI. Existing workspace databases retain their schema, IDs and device credentials.
+
+Node 24.21 documents `node:sqlite` as stability 1.2, release candidate, not fully stable. Keep Node and Electron pinned and verify upgrades against both runtimes. The application uses the small synchronous prepare/get/all/run API and explicit `BEGIN IMMEDIATE`, `COMMIT` and `ROLLBACK` transactions. It does not use changesets or a second synchronization database. See the [pinned Node SQLite documentation](https://raw.githubusercontent.com/nodejs/node/v24.21.0/doc/api/sqlite.md) and [Electron utility-process API](https://www.electronjs.org/docs/latest/api/utility-process).
+
+## Pairing and recovery
+
+An independently started host writes a random, one-use code to its private `pairing-code` file. Enter it in the client and name the device. Codes expire in ten minutes. A connected client can generate another code from the devices panel. Codes grant full access to this single-owner workspace.
+
+A host operator can run `npm run pairing-code`, or `node dist/server/pairing.js` with compiled files, using the same `VESPER_DATA_DIR` as the host. This recovers a lost connection without resetting the database or revoking existing devices. Recovery atomically publishes a private file while holding the SQLite write transaction. Subsequent device revocation still cancels the code normally.
+
+Pairing atomically consumes its code and creates a device. Only token/code hashes are stored in SQLite. Revocation invalidates subsequent requests and cancels every unused pairing code. Repeating an already completed revocation preserves codes created afterwards. Clients pin workspace IDs and refuse a different workspace at the same address. Renames reject stale revisions. Status refreshes every three seconds while visible; durable event-stream synchronization belongs to the next sync work.
+
+The Mac renderer loads only bundled `vesper://app` resources. Its IPC guards check the exact scheme and `app` authority, not Node's opaque `URL.origin` value. Only the trusted top-level renderer can access the narrow connection and local-host bridge. Device connections use Electron `safeStorage`; unavailable encryption never falls back to plaintext. The renderer uses the token in memory for authenticated requests, so a compromised trusted renderer remains a risk. Browser preview connections use tab session storage and survive reload, but do not promise persistence after the browser session ends.
+
+Offline clients retain the last received status in memory and disable changes. No approvals or external writes are queued. Revocation clears saved connection data and stops automatic unauthorized polling. Website credentials and provider tokens are not part of this slice.
+
+## Independent-host container
+
+Run the host on a separate always-on Linux machine for Mac-off availability. The image uses the same lockfile, serves the built client and runs as the unprivileged `node` user.
 
 ```sh
 docker build -t vesper .
@@ -41,22 +60,18 @@ docker volume create vesper-data
 docker run -d --name vesper --restart unless-stopped \
   -p 127.0.0.1:4317:4317 \
   -v vesper-data:/var/lib/vesper \
-  -e VESPER_ALLOWED_ORIGINS=https://vesper.example.com \
+  -e VESPER_ALLOWED_ORIGINS=https://vesper.example.com,vesper://app \
   -e VESPER_HOST_LABEL='Home server' vesper
 ```
 
-Put an existing TLS reverse proxy in front of port 4317. For example, a Caddy site at `vesper.example.com` can use `reverse_proxy 127.0.0.1:4317`. Use your own hostname and configure DNS/network access. Remote clients require HTTPS. Do not expose the raw HTTP port publicly. Application authentication is required even on a private network. Apply request-rate controls at the trusted reverse proxy using its verified client identity, without combining all proxied clients into one shared bucket. The application does not trust caller-supplied forwarded addresses. Its 144-bit pairing codes expire after ten minutes and are consumed once; request bodies are capped at 16 KiB.
+Put an existing TLS reverse proxy in front of port 4317. For example, a Caddy site can use `reverse_proxy 127.0.0.1:4317`. Configure your own hostname, DNS and network access. Do not expose raw HTTP publicly. Application authentication is required even on a private network. Apply request-rate controls at a trusted proxy using its verified client identity, without combining all proxied clients into one shared bucket. The host does not trust caller-supplied forwarded addresses. Pairing codes have 144 bits of randomness and request bodies are capped at 16 KiB.
 
-The initial code is inside `/var/lib/vesper/pairing-code`. The host operator can read it using `docker exec vesper cat /var/lib/vesper/pairing-code`. To renew it, use `docker exec vesper node dist/server/pairing.js`. Do not paste codes in issues or PRs.
+Read the initial code with `docker exec vesper cat /var/lib/vesper/pairing-code`. Renew it with `docker exec vesper node dist/server/pairing.js`. Do not paste codes into issues or PRs. This remains a deployment path, not proof of a running independent host or tested container deployment.
 
-This configuration is a deployment path, not evidence of a running independent host. Mac-off availability, container runtime operation and Android remain unverified until checked on the actual deployment. Scheduled work is not implemented yet.
+## Verification and release limits
 
-## Recovery and checks
+For a consistent backup, stop the host and copy its entire data directory, including the database and `initialized` marker. Restore that directory with owner-only permissions. Local mode must also preserve the desktop's encrypted connection to reconnect without a new pairing. Browser profiles and a shared credential vault do not exist yet.
 
-For a simple consistent backup, stop the host and copy its entire data directory, including the database and `initialized` marker. Restore that directory with owner-only permissions before restarting. Backups contain authentication hashes and private workspace metadata. Browser profiles and a shared credential vault do not exist yet.
+Run `npm run check` for repository metadata, typechecking, lint, desktop syntax and production builds. CI repeats these checks. They do not prove behavior. Temporary verification outside the repository checks actual HTTP/SQLite outcomes, old-database compatibility, private utility-process bootstrap, real process shutdown/crashes, occupied-port recovery, bounded retries and encrypted device storage. The owner's instruction is to keep these harnesses outside the repository and report their outcomes. No retained test suite is added.
 
-Run `npm run check` for repository checks, typechecking, lint and production builds. CI repeats these checks. Desktop CommonJS files receive syntax checks in CI. `npm run format` formats the application files. These static/build checks do not prove behavior.
-
-Temporary end-to-end verification uses separate host processes and real SQLite files outside the repository. It checks authentication, concurrent one-use pairing, independent clients, stale rename conflicts, revocation, clean/crash restarts, missing-database refusal and malformed HTTP requests. No unit-test suite or temporary test harness is retained, following the user's instruction. PR evidence records outcomes and any unverified cases. Never store real account content or private screenshots in the repository.
-
-The first-run reference in Muse has not been observed. This temporary workspace setup screen uses a neutral system light/dark style and does not claim Muse visual parity. It is not the final product design. The complete Muse layout, navigation, interactions and animations on Mac and Android remain the target, with only the documented Vesper differences. Later UI work must directly inspect the relevant Muse view and compare screenshots at matching sizes, plus motion evidence.
+The first-run Muse screen is unverified. This temporary setup UI does not claim Muse parity or replace the complete Mac/Android target. Native voice, screen context, notch/hotkey access, provider-backed replies and personal integrations remain required product work. Later UI changes need direct reference inspection, matched screenshots and motion evidence.

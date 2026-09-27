@@ -14,7 +14,7 @@ An agreed product reference covers every Muse screen, navigation destination, di
 
 [IMR-6](https://linear.app/imraghavojha/issue/985f227d-b01a-462c-b544-2fff3d773368) · Area: foundation. Prerequisites: none.
 
-A user can open Vesper on Mac and Android, connect both to the same shared workspace, and see the same account and connection status. Shared services and scheduled work remain available when the Mac is off. Setup explains device-specific and offline limits. Restarting either app preserves the workspace.
+A user can install and use Vesper on a Mac without owning a phone or configuring a separate host, or connect the Mac to an existing shared workspace. Local work pauses when the Mac is off; work on an independent host remains available. Android is the primary everyday assistant when paired, but is optional for Mac use. Paired Mac and Android devices show the same workspace, account and connection status. Setup explains device-specific and offline limits. Restarting either app preserves its workspace.
 
 ## V03 Keep conversations, settings and actions consistent across devices
 

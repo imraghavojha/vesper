@@ -1,13 +1,11 @@
 "use strict";
 
-// Vesper desktop shell. The backend/shared host runs independently; this process
-// never spawns it. It only opens one hardened window onto the configured renderer.
-
 const {
   app,
   BrowserWindow,
   dialog,
   ipcMain,
+  protocol,
   safeStorage,
   session,
   shell,
@@ -15,6 +13,7 @@ const {
 const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
+const { createLocalHost } = require("./local-host.cjs");
 
 app.setName("Vesper");
 const dataDirectory = path.resolve(
@@ -25,75 +24,66 @@ fs.mkdirSync(dataDirectory, { recursive: true, mode: 0o700 });
 fs.chmodSync(dataDirectory, 0o700);
 app.setPath("userData", dataDirectory);
 app.setPath("sessionData", dataDirectory);
-const connectionPath = path.join(dataDirectory, "connection.encrypted");
-const windows = new Set();
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  process.exit(0);
+}
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "vesper",
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+    },
+  },
+]);
 
-const DEV_RENDERER_URL = "http://127.0.0.1:5177";
-const DEFAULT_HOST_URL = "http://127.0.0.1:4317";
+const RENDERER_IDENTITY = "vesper://app";
 const PARTITION = "persist:vesper";
-// WHATWG URL normalizes hostnames: lowercases names and brackets IPv6 literals.
-const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const connectionPath = path.join(dataDirectory, "connection.encrypted");
+const webRoot = path.resolve(__dirname, "../dist/web");
+const windows = new Set();
+let storedConnection = null;
+let quitting = false;
+let localConnectionPending = null;
 
-// Packaged builds are never dev. Unpackaged builds use the dev renderer unless
-// NODE_ENV=production is set, which allows testing the shared host from source.
-const isDev = !app.isPackaged && process.env.NODE_ENV !== "production";
-
-let rendererUrl = null;
-
-function parseRendererUrl(raw) {
-  let url;
-  try {
-    url = new URL(raw);
-  } catch {
-    throw new Error("renderer URL is not a valid absolute URL");
-  }
-  if (url.username || url.password) {
-    throw new Error("renderer URL must not contain credentials");
-  }
-  if (url.protocol === "https:") return url;
-  if (url.protocol === "http:" && LOOPBACK_HOSTS.has(url.hostname)) return url;
-  throw new Error(
-    "renderer URL must use HTTPS, or HTTP on localhost, 127.0.0.1 or [::1]",
-  );
-}
-
-function resolveRendererUrl() {
-  if (isDev) return parseRendererUrl(DEV_RENDERER_URL);
-  const configured = (process.env.VESPER_DESKTOP_URL || "").trim();
-  return parseRendererUrl(configured || DEFAULT_HOST_URL);
-}
-
-// Logs must never contain paths, queries, fragments or credentials.
-function safeOrigin(raw) {
-  try {
-    return new URL(raw).origin;
-  } catch {
-    return "<invalid-url>";
-  }
-}
-
-function isTrustedUrl(raw) {
-  if (!rendererUrl) return false;
+function trustedUrl(raw) {
   try {
     const url = new URL(raw);
     return (
+      url.protocol === "vesper:" &&
+      url.hostname === "app" &&
+      !url.port &&
       !url.username &&
-      !url.password &&
-      url.protocol === rendererUrl.protocol &&
-      url.origin === rendererUrl.origin
+      !url.password
     );
   } catch {
     return false;
   }
 }
-
+function requireTrustedCaller(event) {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (
+    !windows.has(win) ||
+    !event.senderFrame ||
+    event.senderFrame !== event.sender.mainFrame ||
+    !trustedUrl(event.senderFrame.url)
+  ) {
+    throw new Error("This page cannot access the device connection.");
+  }
+}
 function validateConnection(value) {
   if (
     !value ||
     typeof value !== "object" ||
     Array.isArray(value) ||
     Object.getPrototypeOf(value) !== Object.prototype ||
-    Object.keys(value).length !== 3 ||
+    ![3, 4].includes(Object.keys(value).length) ||
+    Object.keys(value).some(
+      (key) => !["url", "token", "workspaceId", "mode"].includes(key),
+    ) ||
     typeof value.url !== "string" ||
     value.url.length > 2048 ||
     typeof value.token !== "string" ||
@@ -101,155 +91,222 @@ function validateConnection(value) {
     typeof value.workspaceId !== "string" ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
       value.workspaceId,
-    )
-  ) {
+    ) ||
+    (value.mode !== undefined &&
+      value.mode !== "local" &&
+      value.mode !== "remote")
+  )
     throw new Error("Invalid connection.");
-  }
-  const url = parseRendererUrl(value.url);
-  if (url.search || url.hash || url.pathname !== "/")
+  const url = new URL(value.url);
+  const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  if (
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    url.pathname !== "/" ||
+    (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) ||
+    (value.mode === "local" &&
+      (url.protocol !== "http:" || url.hostname !== "127.0.0.1"))
+  )
     throw new Error("Invalid host address.");
   return {
     url: url.origin,
     token: value.token,
     workspaceId: value.workspaceId,
+    mode: value.mode ?? "remote",
   };
 }
-
 function requireEncryption() {
   if (
     !safeStorage.isEncryptionAvailable() ||
     (process.platform === "linux" &&
       safeStorage.getSelectedStorageBackend() === "basic_text")
-  ) {
+  )
     throw new Error("Device encryption is unavailable.");
-  }
 }
-
-function requireTrustedCaller(event) {
-  const window = BrowserWindow.fromWebContents(event.sender);
-  if (
-    !windows.has(window) ||
-    !event.senderFrame ||
-    event.senderFrame !== event.sender.mainFrame ||
-    !isTrustedUrl(event.senderFrame.url)
-  ) {
-    throw new Error("Connection storage is unavailable to this page.");
-  }
-}
-
-function installConnectionStorage() {
-  ipcMain.handle("vesper:connection:load", (event) => {
-    requireTrustedCaller(event);
-    try {
-      requireEncryption();
-      let info;
-      try {
-        info = fs.lstatSync(connectionPath);
-      } catch (error) {
-        if (error.code === "ENOENT") return null;
-        throw error;
-      }
-      if (!info.isFile() || info.size > 16 * 1024)
-        throw new Error("Invalid record.");
-      const saved = JSON.parse(
-        safeStorage.decryptString(fs.readFileSync(connectionPath)),
-      );
-      if (saved.rendererOrigin !== rendererUrl.origin)
-        throw new Error("Different renderer.");
-      return validateConnection(saved.connection);
-    } catch {
-      throw new Error(
-        "Cannot unlock this device's saved connection. Check device encryption or forget the connection.",
-      );
-    }
-  });
-  ipcMain.handle("vesper:connection:save", (event, value) => {
-    requireTrustedCaller(event);
-    let temporary;
-    try {
-      if (value === null) {
-        try {
-          fs.unlinkSync(connectionPath);
-        } catch (error) {
-          if (error.code !== "ENOENT") throw error;
-        }
-        return;
-      }
-      const connection = validateConnection(value);
-      requireEncryption();
-      const encrypted = safeStorage.encryptString(
-        JSON.stringify({ rendererOrigin: rendererUrl.origin, connection }),
-      );
-      temporary = path.join(dataDirectory, `.connection-${randomUUID()}.tmp`);
-      const descriptor = fs.openSync(temporary, "wx", 0o600);
-      try {
-        fs.writeFileSync(descriptor, encrypted);
-        fs.fsyncSync(descriptor);
-      } finally {
-        fs.closeSync(descriptor);
-      }
-      fs.renameSync(temporary, connectionPath);
-    } catch {
-      throw new Error(
-        "Cannot save this device's connection securely. Check device encryption and storage.",
-      );
-    } finally {
-      if (temporary) {
-        try {
-          fs.unlinkSync(temporary);
-        } catch {
-          /* A successful rename already removed the temporary file. */
-        }
-      }
-    }
-  });
-}
-
-function openExternalSafely(raw) {
-  let url;
+function readConnection() {
+  requireEncryption();
+  let info;
   try {
-    url = new URL(raw);
-  } catch {
+    info = fs.lstatSync(connectionPath);
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+  if (!info.isFile() || info.size > 16384)
+    throw new Error("Invalid saved connection.");
+  const saved = JSON.parse(
+    safeStorage.decryptString(fs.readFileSync(connectionPath)),
+  );
+  if (saved.rendererOrigin !== RENDERER_IDENTITY)
+    throw new Error(
+      "Saved connection belongs to a different renderer. Pair again.",
+    );
+  return validateConnection(saved.connection);
+}
+function writeConnection(value) {
+  if (value === null) {
+    try {
+      fs.unlinkSync(connectionPath);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    storedConnection = null;
     return;
   }
-  if (url.protocol !== "https:" || url.username || url.password) return;
-  shell.openExternal(url.href).catch(() => {
-    console.error(`[vesper] failed to open external link origin=${url.origin}`);
+  const connection = validateConnection(value);
+  requireEncryption();
+  const encrypted = safeStorage.encryptString(
+    JSON.stringify({ rendererOrigin: RENDERER_IDENTITY, connection }),
+  );
+  const temporary = path.join(dataDirectory, `.connection-${randomUUID()}.tmp`);
+  try {
+    const descriptor = fs.openSync(temporary, "wx", 0o600);
+    try {
+      fs.writeFileSync(descriptor, encrypted);
+      fs.fsyncSync(descriptor);
+    } finally {
+      fs.closeSync(descriptor);
+    }
+    fs.renameSync(temporary, connectionPath);
+    storedConnection = connection;
+  } finally {
+    try {
+      fs.unlinkSync(temporary);
+    } catch {
+      /* Renamed files no longer have a temporary path. */
+    }
+  }
+}
+function broadcast(channel, value) {
+  for (const win of windows)
+    if (!win.isDestroyed() && trustedUrl(win.webContents.getURL()))
+      win.webContents.send(channel, value);
+}
+const localHost = createLocalHost({
+  modulePath: path.resolve(__dirname, "../dist/server/index.js"),
+  dataDirectory,
+  onStatus(status) {
+    broadcast("vesper:local:status", status);
+    if (
+      status.state === "running" &&
+      storedConnection?.mode === "local" &&
+      status.url &&
+      status.workspaceId
+    ) {
+      if (status.workspaceId !== storedConnection.workspaceId) {
+        broadcast("vesper:local:status", {
+          state: "failed",
+          message:
+            "The local workspace identity changed. Restore its data before reconnecting.",
+        });
+        void localHost.stop();
+        return;
+      }
+      if (status.url !== storedConnection.url) {
+        try {
+          writeConnection({ ...storedConnection, url: status.url });
+          broadcast("vesper:connection:changed", storedConnection);
+        } catch {
+          broadcast("vesper:local:status", {
+            state: "failed",
+            message:
+              "The updated local connection could not be saved securely.",
+          });
+        }
+      }
+    }
+  },
+});
+function installBridge() {
+  ipcMain.handle("vesper:connection:load", async (event) => {
+    requireTrustedCaller(event);
+    try {
+      storedConnection = readConnection();
+      if (storedConnection?.mode === "local") {
+        const ready = await localHost.start();
+        if (ready.workspaceId !== storedConnection.workspaceId)
+          throw new Error("Local workspace identity changed.");
+        writeConnection({ ...storedConnection, url: ready.url });
+      }
+      return storedConnection;
+    } catch {
+      throw new Error(
+        "Saved connection could not be opened. Check local host status or pair again.",
+      );
+    }
+  });
+  ipcMain.handle("vesper:connection:save", async (event, value) => {
+    requireTrustedCaller(event);
+    try {
+      writeConnection(value);
+    } catch {
+      throw new Error("Cannot save this device's connection securely.");
+    }
+    if (value?.mode !== "local") await localHost.stop();
+  });
+  ipcMain.handle("vesper:local:create", async (event) => {
+    requireTrustedCaller(event);
+    requireEncryption();
+    if (!localConnectionPending) {
+      localConnectionPending = (async () => {
+        const ready = await localHost.start();
+        if (storedConnection?.mode === "local") {
+          if (ready.workspaceId !== storedConnection.workspaceId)
+            throw new Error(
+              "Local workspace identity changed. Restore the existing data first.",
+            );
+          const response = await fetch(ready.url + "/trpc/workspace", {
+            headers: { Authorization: `Bearer ${storedConnection.token}` },
+            signal: AbortSignal.timeout(5000),
+          });
+          if (response.ok) {
+            writeConnection({ ...storedConnection, url: ready.url });
+            return storedConnection;
+          }
+          if (response.status !== 401)
+            throw new Error("Local workspace is unavailable.");
+        }
+        const connection = await localHost.bootstrap();
+        writeConnection(connection);
+        return storedConnection;
+      })().finally(() => {
+        localConnectionPending = null;
+      });
+    }
+    return localConnectionPending;
+  });
+  ipcMain.handle("vesper:local:status", (event) => {
+    requireTrustedCaller(event);
+    return localHost.status();
   });
 }
-
-function hardenSession(ses) {
-  ses.setPermissionRequestHandler((_webContents, _permission, callback) =>
-    callback(false),
-  );
-  ses.setPermissionCheckHandler(() => false);
-  ses.setDevicePermissionHandler(() => false);
+function openExternal(raw) {
+  try {
+    const url = new URL(raw);
+    if (url.protocol === "https:" && !url.username && !url.password)
+      void shell.openExternal(url.href).catch(() => {});
+  } catch {
+    /* Reject invalid links. */
+  }
 }
-
-// Applies to every webContents, so nothing created later escapes the policy.
 app.on("web-contents-created", (_event, contents) => {
   contents.setWindowOpenHandler(({ url }) => {
-    openExternalSafely(url);
+    openExternal(url);
     return { action: "deny" };
   });
-
-  contents.on("will-attach-webview", (event) => {
-    event.preventDefault();
-  });
-
+  contents.on("will-attach-webview", (event) => event.preventDefault());
   contents.on("will-frame-navigate", (event) => {
-    if (isTrustedUrl(event.url)) return;
-    event.preventDefault();
-    if (event.isMainFrame) openExternalSafely(event.url);
+    if (!trustedUrl(event.url)) {
+      event.preventDefault();
+      if (event.isMainFrame) openExternal(event.url);
+    }
   });
-
   contents.on("will-redirect", (event) => {
-    if (isTrustedUrl(event.url)) return;
-    event.preventDefault();
-    console.warn(`[vesper] blocked redirect origin=${safeOrigin(event.url)}`);
+    if (!trustedUrl(event.url)) event.preventDefault();
   });
 });
-
 function createWindow() {
   const win = new BrowserWindow({
     width: 1130,
@@ -257,9 +314,8 @@ function createWindow() {
     minWidth: 900,
     minHeight: 650,
     title: "Vesper",
+    backgroundColor: "#191919",
     webPreferences: {
-      // Device tokens persist through the narrow encrypted-storage bridge.
-      // Trusted renderer code still receives the token for authenticated requests.
       preload: path.join(__dirname, "preload.cjs"),
       partition: PARTITION,
       contextIsolation: true,
@@ -270,53 +326,78 @@ function createWindow() {
   });
   windows.add(win);
   win.on("closed", () => windows.delete(win));
-
-  win.webContents.on(
-    "did-fail-load",
-    (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
-      // ERR_ABORTED (-3) is expected when a navigation is cancelled by our own policy.
-      if (errorCode === -3) return;
-      console.error(
-        `[vesper] load failed code=${errorCode} (${errorDescription}) ` +
-          `origin=${safeOrigin(validatedURL)} mainFrame=${isMainFrame}`,
-      );
-    },
-  );
-
-  win.webContents.on("render-process-gone", (_event, details) => {
-    console.error(
-      `[vesper] renderer process gone reason=${details.reason} exitCode=${details.exitCode}`,
-    );
-  });
-
-  // did-fail-load reports the details; the rejection message may include the full URL.
-  win.loadURL(rendererUrl.href).catch(() => {});
-
-  return win;
-}
-
-app.whenReady().then(() => {
-  try {
-    rendererUrl = resolveRendererUrl();
-  } catch (err) {
-    console.error(`[vesper] invalid renderer configuration: ${err.message}`);
+  win.loadURL(RENDERER_IDENTITY + "/").catch(() => {
     dialog.showErrorBox(
       "Vesper",
-      `Invalid desktop URL configuration: ${err.message}`,
+      "The bundled workspace could not load. Reinstall the app or rebuild it from source.",
     );
-    app.quit();
-    return;
-  }
-
-  hardenSession(session.fromPartition(PARTITION));
-  installConnectionStorage();
+  });
+  return win;
+}
+app.whenReady().then(() => {
+  const ses = session.fromPartition(PARTITION);
+  ses.setPermissionRequestHandler((_contents, _permission, callback) =>
+    callback(false),
+  );
+  ses.setPermissionCheckHandler(() => false);
+  ses.setDevicePermissionHandler(() => false);
+  ses.protocol.handle("vesper", async (request) => {
+    if (!trustedUrl(request.url))
+      return new Response("Not found", { status: 404 });
+    if (!["GET", "HEAD"].includes(request.method))
+      return new Response("Method not allowed", { status: 405 });
+    try {
+      const url = new URL(request.url);
+      const target = path.resolve(
+        webRoot,
+        "." +
+          decodeURIComponent(
+            url.pathname === "/" ? "/index.html" : url.pathname,
+          ),
+      );
+      if (!target.startsWith(webRoot + path.sep))
+        return new Response("Not found", { status: 404 });
+      const bytes = await fs.promises.readFile(target);
+      const type =
+        {
+          ".html": "text/html; charset=utf-8",
+          ".js": "text/javascript",
+          ".css": "text/css",
+          ".svg": "image/svg+xml",
+          ".png": "image/png",
+        }[path.extname(target)] || "application/octet-stream";
+      return new Response(request.method === "HEAD" ? null : bytes, {
+        headers: {
+          "Content-Type": type,
+          "X-Content-Type-Options": "nosniff",
+          "Content-Security-Policy":
+            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https: http://127.0.0.1:* http://localhost:*; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+        },
+      });
+    } catch {
+      return new Response("Not found", { status: 404 });
+    }
+  });
+  installBridge();
   createWindow();
-
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (!windows.size) createWindow();
   });
 });
-
+app.on("second-instance", () => {
+  const win = [...windows][0];
+  if (win) {
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+  }
+});
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
+});
+app.on("before-quit", (event) => {
+  if (quitting) return;
+  event.preventDefault();
+  quitting = true;
+  void localHost.stop().finally(() => app.quit());
 });

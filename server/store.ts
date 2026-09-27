@@ -1,4 +1,5 @@
-import Database from "better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
+import { transaction } from "./transaction.js";
 import { randomBytes, createHash, randomUUID } from "node:crypto";
 import {
   mkdirSync,
@@ -39,11 +40,11 @@ export function openStore(directory: string) {
       "Workspace database is missing. Restore your backup; refusing to replace an initialized workspace.",
     );
   }
-  const db = new Database(databasePath);
+  const db = new DatabaseSync(databasePath, { timeout: 5000 });
   chmodSync(resolve(directory, "workspace.sqlite"), 0o600);
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
-  db.pragma("busy_timeout = 5000");
+  db.exec("PRAGMA journal_mode = WAL");
+  db.exec("PRAGMA foreign_keys = ON");
+  db.exec("PRAGMA busy_timeout = 5000");
   db.exec(`CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS workspace (id TEXT PRIMARY KEY, name TEXT NOT NULL, version INTEGER NOT NULL, createdAt TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS devices (id TEXT PRIMARY KEY, name TEXT NOT NULL, platform TEXT NOT NULL, tokenHash TEXT NOT NULL UNIQUE, pairedAt TEXT NOT NULL, revokedAt TEXT);
@@ -85,24 +86,22 @@ export function openStore(directory: string) {
     const temporary = resolve(directory, `.pairing-${randomUUID()}.tmp`);
     let published = false;
     try {
-      return db
-        .transaction(() => {
-          if (reset) db.prepare("DELETE FROM pairing_codes").run();
-          const { code, expiresAt } = createPairingCode();
-          const descriptor = openSync(temporary, "wx", 0o600);
-          try {
-            writeFileSync(descriptor, code + "\n");
-            fsyncSync(descriptor);
-          } finally {
-            closeSync(descriptor);
-          }
-          // Hold the SQLite write lock through publication so revocation cannot
-          // invalidate this code between insertion and its file becoming visible.
-          renameSync(temporary, codePath);
-          published = true;
-          return { file: codePath, expiresAt };
-        })
-        .immediate();
+      return transaction(db, () => {
+        if (reset) db.prepare("DELETE FROM pairing_codes").run();
+        const { code, expiresAt } = createPairingCode();
+        const descriptor = openSync(temporary, "wx", 0o600);
+        try {
+          writeFileSync(descriptor, code + "\n");
+          fsyncSync(descriptor);
+        } finally {
+          closeSync(descriptor);
+        }
+        // Hold the SQLite write lock through publication so revocation cannot
+        // invalidate this code between insertion and its file becoming visible.
+        renameSync(temporary, codePath);
+        published = true;
+        return { file: codePath, expiresAt };
+      });
     } catch (error) {
       if (published && existsSync(codePath)) unlinkSync(codePath);
       throw error;
@@ -127,8 +126,8 @@ export function openStore(directory: string) {
         .get(hash(token)) as Device | undefined) ?? null
     );
   }
-  const pair = db.transaction(
-    (input: { code: string; name: string; platform: string }) => {
+  const pair = (input: { code: string; name: string; platform: string }) =>
+    transaction(db, () => {
       const row = db
         .prepare(
           "DELETE FROM pairing_codes WHERE hash = ? AND expiresAt > ? RETURNING hash",
@@ -157,10 +156,12 @@ export function openStore(directory: string) {
         workspaceId: workspace.id,
         protocolVersion: 1,
       };
-    },
-  );
+    });
   return {
     authenticate,
+    identity() {
+      return db.prepare("SELECT id FROM workspace").get() as { id: string };
+    },
     createPairingCode,
     publishPairingCode,
     pair(input: { code: string; name: string; platform: string }) {
@@ -199,7 +200,7 @@ export function openStore(directory: string) {
         });
     },
     revoke(id: string) {
-      db.transaction(() => {
+      transaction(db, () => {
         const result = db
           .prepare(
             "UPDATE devices SET revokedAt = ? WHERE id = ? AND revokedAt IS NULL",
@@ -210,7 +211,7 @@ export function openStore(directory: string) {
           // Repeating a completed revocation must preserve codes issued afterwards.
           db.prepare("DELETE FROM pairing_codes").run();
         }
-      })();
+      });
     },
     close() {
       db.close();
