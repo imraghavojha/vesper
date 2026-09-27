@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import { existsSync } from "node:fs";
+import { lstatSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import {
   MAX_VAULT_ENTRIES,
@@ -52,6 +52,7 @@ type StateRow = {
   revision: number;
   createdAt: string;
   updatedAt: string;
+  locked: number;
 };
 type EntryRow = Omit<VaultEntryMetadata, "origins"> & {
   originsJson: string;
@@ -149,7 +150,6 @@ export function createVault(options: VaultOptions) {
     (keyRelative !== ".." &&
       !keyRelative.startsWith(".." + sep) &&
       !isAbsolute(keyRelative));
-  let locked = options.startLocked ?? false;
   const schema = db.prepare("SELECT version FROM schema_version").get() as {
     version: number;
   };
@@ -160,7 +160,8 @@ export function createVault(options: VaultOptions) {
           singleton INTEGER PRIMARY KEY CHECK(singleton=1),
           workspaceId TEXT NOT NULL, keyId TEXT NOT NULL,
           verifierJson TEXT NOT NULL, recoveryJson TEXT NOT NULL,
-          revision INTEGER NOT NULL, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+          revision INTEGER NOT NULL, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL,
+          locked INTEGER NOT NULL DEFAULT 0 CHECK(locked IN (0,1))
         );
         CREATE TABLE vault_entries (
           id TEXT PRIMARY KEY,
@@ -179,6 +180,25 @@ export function createVault(options: VaultOptions) {
   db.exec(`CREATE TABLE IF NOT EXISTS vault_retired_ids (
     id TEXT PRIMARY KEY, retiredAt TEXT NOT NULL
   )`);
+  // Also upgrade private preview databases created earlier in this unreleased slice.
+  transaction(db, () => {
+    if (
+      !db
+        .prepare("PRAGMA table_info(vault_state)")
+        .all()
+        .some((column) => column.name === "locked")
+    )
+      db.exec(
+        "ALTER TABLE vault_state ADD COLUMN locked INTEGER NOT NULL DEFAULT 0 CHECK(locked IN (0,1))",
+      );
+  });
+  if (options.startLocked)
+    transaction(db, () => {
+      if (state()?.locked === 0) {
+        db.prepare("UPDATE vault_state SET locked=1 WHERE singleton=1").run();
+        changed("vault");
+      }
+    });
 
   function state(): StateRow | undefined {
     const row = db
@@ -199,6 +219,14 @@ export function createVault(options: VaultOptions) {
         "UNAVAILABLE",
         "The host key file must be outside the workspace data directory.",
       );
+  }
+  function keyPathEntry() {
+    try {
+      return lstatSync(keyFilePath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw unavailable();
+    }
   }
   function keys(): VaultKey[] {
     configured();
@@ -236,7 +264,7 @@ export function createVault(options: VaultOptions) {
     }
   }
   function unlockedKey(row = initialized()): VaultKey {
-    if (locked)
+    if (row.locked !== 0)
       throw new VaultError("LOCKED", "Unlock the shared vault first.");
     return keyFor(row);
   }
@@ -297,7 +325,8 @@ export function createVault(options: VaultOptions) {
           message: "Set up encrypted storage on this workspace's host.",
         };
       }
-      if (!existsSync(keyFilePath))
+      const keyFile = keyPathEntry();
+      if (!keyFile)
         return {
           state: "missing-key",
           revision: row.revision,
@@ -305,7 +334,8 @@ export function createVault(options: VaultOptions) {
           message:
             "The host key is missing. Use the recovery passphrase to restore it.",
         };
-      if (locked)
+      if (!keyFile.isFile() || keyFile.isSymbolicLink()) throw unavailable();
+      if (row.locked !== 0)
         return {
           state: "locked",
           revision: row.revision,
@@ -386,7 +416,9 @@ export function createVault(options: VaultOptions) {
             workspaceId,
             recoveryPassphrase,
           );
-          db.prepare("INSERT INTO vault_state VALUES (1,?,?,?,?,1,?,?)").run(
+          db.prepare(
+            "INSERT INTO vault_state (singleton,workspaceId,keyId,verifierJson,recoveryJson,revision,createdAt,updatedAt,locked) VALUES (1,?,?,?,?,1,?,?,0)",
+          ).run(
             workspaceId,
             key.id,
             JSON.stringify(sealed),
@@ -399,7 +431,6 @@ export function createVault(options: VaultOptions) {
           for (const key of ring) key.bytes.fill(0);
         }
       });
-      locked = false;
       options.notify();
       return snapshot();
     },
@@ -531,17 +562,25 @@ export function createVault(options: VaultOptions) {
       return { removed: true as const };
     },
     lock() {
-      initialized();
-      locked = true;
-      transaction(db, () => changed("vault"));
+      transaction(db, () => {
+        if (initialized().locked === 0) {
+          db.prepare("UPDATE vault_state SET locked=1 WHERE singleton=1").run();
+          changed("vault");
+        }
+      });
       options.notify();
       return snapshot();
     },
     unlock() {
-      const key = keyFor(initialized());
-      key.bytes.fill(0);
-      locked = false;
-      transaction(db, () => changed("vault"));
+      transaction(db, () => {
+        const row = initialized();
+        const key = keyFor(row);
+        key.bytes.fill(0);
+        if (row.locked !== 0) {
+          db.prepare("UPDATE vault_state SET locked=0 WHERE singleton=1").run();
+          changed("vault");
+        }
+      });
       options.notify();
       return snapshot();
     },
@@ -550,7 +589,7 @@ export function createVault(options: VaultOptions) {
       validateRecoveryPassphrase(recoveryPassphrase);
       transaction(db, () => {
         const row = initialized();
-        if (existsSync(keyFilePath))
+        if (keyPathEntry())
           throw new VaultError(
             "CONFLICT",
             "A host key file already exists. Recovery does not replace it; restore the matching key or move a damaged file aside privately first.",
@@ -586,13 +625,22 @@ export function createVault(options: VaultOptions) {
             const plaintext = decrypt(key, entry);
             plaintext.fill(0);
           }
-          writeKeyRing(keyFilePath, workspaceId, [key], "create");
+          try {
+            writeKeyRing(keyFilePath, workspaceId, [key], "create");
+          } catch (error) {
+            if (error instanceof VaultKeyFileError && error.code === "exists")
+              throw new VaultError(
+                "CONFLICT",
+                "A host key file already exists. Recovery does not replace it; restore the matching key or move a damaged file aside privately first.",
+              );
+            throw unavailable();
+          }
+          db.prepare("UPDATE vault_state SET locked=0 WHERE singleton=1").run();
           changed("vault");
         } finally {
           key.bytes.fill(0);
         }
       });
-      locked = false;
       options.notify();
       return snapshot();
     },
