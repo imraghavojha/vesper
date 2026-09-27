@@ -55,23 +55,35 @@ export async function loadDraft(
 ): Promise<{ draft: Draft; saved: boolean }> {
   const name = key(workspaceId, conversationId);
   const state = cell(name);
-  // View replacement never bypasses writes acknowledged by another view.
+  // Fence older views' writes, then verify persistence even for cached drafts.
   for (;;) {
     const tail = state.tail;
+    const revision = state.revision;
     await tail.catch(() => {});
-    if (tail !== state.tail) continue;
-    if (state.latest)
-      return {
-        draft: validate(state.latest),
-        saved: state.acknowledged === state.revision,
-      };
-    const value = window.vesperDesktop
-      ? await window.vesperDesktop.loadDraft(workspaceId, conversationId)
-      : JSON.parse(sessionStorage.getItem(name) ?? "null");
-    if (state.latest || tail !== state.tail) continue;
-    state.latest =
-      value === null ? { text: "", pending: null } : validate(value);
-    return { draft: validate(state.latest), saved: true };
+    if (tail !== state.tail || revision !== state.revision) continue;
+    let stored: Draft;
+    try {
+      const value = window.vesperDesktop
+        ? await window.vesperDesktop.loadDraft(workspaceId, conversationId)
+        : JSON.parse(sessionStorage.getItem(name) ?? "null");
+      stored = value === null ? { text: "", pending: null } : validate(value);
+    } catch (error) {
+      if (tail !== state.tail || revision !== state.revision) continue;
+      if (state.latest) return { draft: validate(state.latest), saved: false };
+      throw error;
+    }
+    if (tail !== state.tail || revision !== state.revision) continue;
+    if (!state.latest) state.latest = stored;
+    const latest = state.latest;
+    const matches =
+      latest.text === stored.text &&
+      (latest.pending === null
+        ? stored.pending === null
+        : stored.pending !== null &&
+          latest.pending.requestId === stored.pending.requestId &&
+          latest.pending.text === stored.pending.text);
+    if (matches) state.acknowledged = revision;
+    return { draft: validate(latest), saved: matches };
   }
 }
 async function writeDraft(
