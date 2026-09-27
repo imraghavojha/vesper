@@ -69,7 +69,7 @@ An upgrade from the first Mac preview migrates its encrypted connection without 
 
 The Mac renderer loads only bundled `vesper://app` resources. Its IPC guards check the exact scheme and `app` authority, not Node's opaque `URL.origin` value. Only the trusted top-level renderer can access the narrow connection and local-host bridge. Device connections use Electron `safeStorage`; unavailable encryption never falls back to plaintext. The renderer uses the token in memory for authenticated requests, so a compromised trusted renderer remains a risk. Browser preview connections use tab session storage and survive reload, but do not promise persistence after the browser session ends.
 
-Offline clients retain the last received status in memory and disable changes. No approvals or external writes are queued. Revocation clears saved connection data and stops automatic unauthorized polling. Website credentials and provider tokens are not part of this slice.
+Offline clients retain the last received status in memory and disable changes. No approvals or external writes are queued. Revocation clears saved connection data and stops automatic unauthorized polling. Workspace authentication does not establish website or connector authorization. Secure Store provides encrypted credential storage; OAuth and connector flows remain separate.
 
 ## Independent-host container
 
@@ -78,20 +78,22 @@ Run the host on a separate always-on Linux machine for Mac-off availability. The
 ```sh
 docker build -t vesper .
 docker volume create vesper-data
+docker volume create vesper-secrets
 docker run -d --name vesper --restart unless-stopped \
   -p 127.0.0.1:4317:4317 \
   -v vesper-data:/var/lib/vesper \
+  -v vesper-secrets:/var/lib/vesper-secrets \
   -e VESPER_ALLOWED_ORIGINS=https://vesper.example.com,vesper://app \
   -e VESPER_HOST_LABEL='Home server' vesper
 ```
 
-Put an existing TLS reverse proxy in front of port 4317. For example, a Caddy site can use `reverse_proxy 127.0.0.1:4317`. Configure your own hostname, DNS and network access. Do not expose raw HTTP publicly. Application authentication is required even on a private network. Apply request-rate controls at a trusted proxy using its verified client identity, without combining all proxied clients into one shared bucket. The host does not trust caller-supplied forwarded addresses. Pairing codes have 144 bits of randomness and request bodies are capped at 64 KiB.
+Put an existing TLS reverse proxy in front of port 4317. For example, a Caddy site can use `reverse_proxy 127.0.0.1:4317`. Configure your own hostname, DNS and network access. Do not expose raw HTTP publicly. Application authentication is required even on a private network. Apply request-rate controls at a trusted proxy using its verified client identity, without combining all proxied clients into one shared bucket. The host does not trust caller-supplied forwarded addresses. Pairing codes have 144 bits of randomness and request bodies are capped at 128 KiB; individual secure values remain limited to 16 KiB of UTF-8. Keep the separate private secrets volume out of database backups and future provider/browser worker mounts.
 
 Read the initial code with `docker exec vesper cat /var/lib/vesper/pairing-code`. Renew it with `docker exec vesper node dist/server/pairing.js`. Do not paste codes into issues or PRs. This remains a deployment path, not proof of a running independent host or tested container deployment.
 
 ## Verification and release limits
 
-For a consistent backup, stop the host and copy its entire data directory, including the database and `initialized` marker. Restore that directory with owner-only permissions. Local mode must also preserve the desktop's encrypted connection to reconnect without a new pairing. Browser profiles and a shared credential vault do not exist yet.
+Use the consistent SQLite backup command and [vault recovery workflow](vault.md). It preserves workspace/device state and the wrapped vault recovery copy while excluding the raw key file. Keep the backup private; non-credential workspace data is not separately encrypted. Local mode must also preserve the desktop's encrypted connection to reconnect without a new pairing. Browser profile storage is not implemented by this slice.
 
 Run `npm run check` for repository metadata, typechecking, lint, desktop syntax and production builds. CI repeats these checks. They do not prove behavior. Temporary verification outside the repository checks actual HTTP/SQLite outcomes, old-database compatibility, private utility-process bootstrap, real process shutdown/crashes, occupied-port recovery, bounded retries and encrypted device storage. The owner's instruction is to keep these harnesses outside the repository and report their outcomes. No retained test suite is added.
 

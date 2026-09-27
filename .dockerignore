@@ -2,6 +2,9 @@
 node_modules
 dist
 .vesper
+.vesper-secrets
+**/vault-keys.json
+**/.vault-keys.json.*.tmp
 .t3
 .env*
 *.sqlite*
