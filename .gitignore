@@ -18,3 +18,5 @@ test-results/
 .github/pr-assets/
 
 *.tsbuildinfo
+
+release/
