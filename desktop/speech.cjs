@@ -10,7 +10,11 @@ function createSpeechController({ executablePath, onEvent }) {
   const requests = new Map();
   const stoppedWaiters = new Set();
   const emit = (owner, event) => {
-    if (owner && !owner.isDestroyed()) onEvent(owner, event);
+    try {
+      if (owner && !owner.isDestroyed()) onEvent(owner, event);
+    } catch {
+      /* A renderer failure must not interrupt capture cleanup. */
+    }
   };
   function ended() {
     child = null;
@@ -73,14 +77,26 @@ function createSpeechController({ executablePath, onEvent }) {
     )
       return;
     if (value.type === "transcript") {
+      if (active.cancelRequested) return;
       if (value.revision <= active.revision) return;
       active.revision = value.revision;
     }
-    emit(owner, value);
+    emit(
+      owner,
+      value.type === "stopped" && active?.cancelRequested
+        ? { ...value, final: false, reason: "cancelled" }
+        : value,
+    );
     if (["status", "error", "stopped"].includes(value.type))
       requests.delete(value.id);
+    if (value.type === "error" && active) {
+      for (const operation of ["stop", "cancel"])
+        if (active.controls[operation] === value.id)
+          delete active.controls[operation];
+    }
     if (value.type === "stopped" && active?.sessionId === value.sessionId) {
       requests.delete(active.id);
+      for (const id of Object.values(active.controls)) requests.delete(id);
       active = null;
       for (const done of stoppedWaiters) done();
       stoppedWaiters.clear();
@@ -111,9 +127,31 @@ function createSpeechController({ executablePath, onEvent }) {
         launched.kill("SIGKILL");
       }
     });
-    child.stdin.on("error", () => {});
+    child.stdin.on("error", () => {
+      try {
+        launched.kill("SIGKILL");
+      } catch {
+        /* Exit remains unconfirmed until close. */
+      }
+    });
     child.once("error", () => {
-      if (child === launched) ended();
+      if (child !== launched) return;
+      if (!launched.pid) ended();
+      else {
+        if (active)
+          emit(active.owner, {
+            id: active.id,
+            sessionId: active.sessionId,
+            type: "error",
+            code: "helper-error",
+            message: "Voice input status is unconfirmed. Retry Cancel.",
+          });
+        try {
+          launched.kill("SIGKILL");
+        } catch {
+          /* A process error is not an exit receipt. */
+        }
+      }
     });
     child.once("close", () => {
       if (child === launched) ended();
@@ -121,6 +159,8 @@ function createSpeechController({ executablePath, onEvent }) {
     return child;
   }
   function send(command, owner) {
+    const control =
+      command?.command === "stop" || command?.command === "cancel";
     if (
       !command ||
       !uuid.test(command.id) ||
@@ -128,7 +168,7 @@ function createSpeechController({ executablePath, onEvent }) {
         command.command,
       ) ||
       requests.has(command.id) ||
-      requests.size >= 16
+      (!control && requests.size >= 16)
     )
       throw new Error("Invalid voice command.");
     if (
@@ -142,53 +182,112 @@ function createSpeechController({ executablePath, onEvent }) {
       !uuid.test(command.sessionId)
     )
       throw new Error("Invalid capture session.");
+    if (
+      control &&
+      (active?.owner !== owner || active.sessionId !== command.sessionId)
+    )
+      throw new Error("Voice session is not owned by this window.");
+    if (control && active.controls[command.command]) return;
+    if (command.command === "start" && active)
+      throw new Error("Voice input is already active in another window.");
+    const process = control ? child : ensure();
+    if (!process)
+      throw new Error("Voice process is unavailable; stop is not confirmed.");
     if (command.command === "start") {
-      if (active)
-        throw new Error("Voice input is already active in another window.");
       active = {
         id: command.id,
         sessionId: command.sessionId,
         owner,
         revision: -1,
+        controls: {},
+        cancelRequested: false,
+        cancellation: null,
       };
-    } else if (
-      ["stop", "cancel"].includes(command.command) &&
-      (active?.owner !== owner || active.sessionId !== command.sessionId)
-    )
-      throw new Error("Voice session is not owned by this window.");
-    const process = ensure();
+    }
+    if (control) active.controls[command.command] = command.id;
+    if (command.command === "cancel") active.cancelRequested = true;
     requests.set(command.id, owner);
-    process.stdin.write(
-      JSON.stringify({
-        id: command.id,
-        command: command.command,
-        ...(command.sessionId ? { sessionId: command.sessionId } : {}),
-        locale: command.locale ?? "en-US",
-      }) + "\n",
-    );
+    try {
+      process.stdin.write(
+        JSON.stringify({
+          id: command.id,
+          command: command.command,
+          ...(command.sessionId ? { sessionId: command.sessionId } : {}),
+          locale: command.locale ?? "en-US",
+        }) + "\n",
+      );
+    } catch {
+      if (!process.pid) {
+        ended();
+        throw new Error("Voice process did not start.");
+      }
+      if (active)
+        emit(active.owner, {
+          id: active.id,
+          sessionId: active.sessionId,
+          type: "error",
+          code: "write-failed",
+          message: "Voice input status is unconfirmed. Retry Cancel.",
+        });
+      try {
+        process.kill("SIGKILL");
+      } catch {
+        /* Keep the session until a real stop/exit receipt. */
+      }
+    }
   }
-  async function cancelOwner(owner) {
-    if (!active || active.owner !== owner) return;
-    const sessionId = active.sessionId;
-    const waiting = new Promise((resolve) => {
-      let timer;
+  function cancelOwner(owner) {
+    if (!active || active.owner !== owner) return Promise.resolve();
+    const capture = active;
+    if (capture.cancellation) return capture.cancellation;
+    const sessionId = capture.sessionId;
+    capture.cancelRequested = true;
+    const waiting = new Promise((resolve, reject) => {
+      let timer, exitTimer;
       const done = () => {
         clearTimeout(timer);
+        clearTimeout(exitTimer);
         stoppedWaiters.delete(done);
         resolve();
       };
       stoppedWaiters.add(done);
       timer = setTimeout(() => {
-        if (child) child.kill("SIGKILL");
-        else done();
+        try {
+          child?.kill("SIGKILL");
+        } catch {
+          /* Wait for proof rather than assuming kill succeeded. */
+        }
+        exitTimer = setTimeout(() => {
+          stoppedWaiters.delete(done);
+          emit(capture.owner, {
+            id: capture.id,
+            sessionId,
+            type: "error",
+            code: "stop-unconfirmed",
+            message:
+              "Voice input could not be confirmed stopped. Retry Cancel.",
+          });
+          reject(
+            new Error(
+              "Voice input could not be confirmed stopped. Retry Cancel.",
+            ),
+          );
+        }, 2000);
       }, 3000);
+    });
+    capture.cancellation = waiting.finally(() => {
+      if (active === capture) capture.cancellation = null;
     });
     try {
       send({ id: randomUUID(), command: "cancel", sessionId }, owner);
     } catch {
-      child?.kill("SIGKILL");
+      try {
+        child?.kill("SIGKILL");
+      } catch {
+        /* The bounded waiter rejects if no receipt arrives. */
+      }
     }
-    await waiting;
+    return capture.cancellation;
   }
   return {
     send,
@@ -197,10 +296,33 @@ function createSpeechController({ executablePath, onEvent }) {
       if (active) await cancelOwner(active.owner);
       if (child) {
         const current = child;
-        await new Promise((resolve) => {
-          current.once("close", resolve);
-          current.stdin.end();
-          setTimeout(() => current.kill("SIGKILL"), 1000).unref();
+        await new Promise((resolve, reject) => {
+          const done = () => {
+            clearTimeout(killTimer);
+            clearTimeout(exitTimer);
+            resolve();
+          };
+          const killTimer = setTimeout(() => {
+            try {
+              current.kill("SIGKILL");
+            } catch {
+              /* Wait for actual close. */
+            }
+          }, 1000);
+          const exitTimer = setTimeout(() => {
+            current.removeListener("close", done);
+            reject(new Error("Voice process exit could not be confirmed."));
+          }, 3000);
+          current.once("close", done);
+          try {
+            current.stdin.end();
+          } catch {
+            try {
+              current.kill("SIGKILL");
+            } catch {
+              /* The exit deadline remains authoritative. */
+            }
+          }
         });
       }
     },

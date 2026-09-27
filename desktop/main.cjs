@@ -530,19 +530,33 @@ function createWindow(quick = false) {
   });
   windows.add(win);
   const contents = win.webContents;
+  const cancelCapture = () => {
+    void speech.cancelOwner(contents).catch(() => {
+      // The controller reports an unconfirmed state to a surviving renderer.
+      // Restore it for retry instead of leaving potentially live capture hidden.
+      try {
+        if (!win.isDestroyed()) {
+          if (win.isMinimized()) win.restore();
+          win.show();
+        }
+      } catch {
+        /* A closing window cannot receive the retry status. */
+      }
+    });
+  };
   win.on("closed", () => {
     windows.delete(win);
     if (mainWindow === win) mainWindow = null;
-    void speech.cancelOwner(contents);
+    cancelCapture();
   });
   win.on("hide", () => {
-    void speech.cancelOwner(win.webContents);
+    cancelCapture();
   });
   win.on("minimize", () => {
-    void speech.cancelOwner(contents);
+    cancelCapture();
   });
   win.webContents.on("render-process-gone", () => {
-    void speech.cancelOwner(win.webContents);
+    cancelCapture();
   });
   win.loadURL(RENDERER_IDENTITY + (quick ? "/?quick=1" : "/")).catch(() => {
     dialog.showErrorBox(

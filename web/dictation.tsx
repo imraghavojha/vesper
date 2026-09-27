@@ -11,9 +11,10 @@ export function Dictation({
   const bridge = window.vesperDesktop;
   const [status, setStatus] = useState<SpeechStatus | null>(null);
   const [phase, setPhase] = useState<
-    "idle" | "starting" | "recording" | "stopping" | "cancelling"
+    "idle" | "starting" | "recording" | "stopping" | "cancelling" | "uncertain"
   >("idle");
   const [text, setText] = useState("");
+  const [discarding, setDiscarding] = useState(false);
   const [error, setError] = useState("");
   const current = useRef<{
     sessionId: string;
@@ -30,6 +31,7 @@ export function Dictation({
         setError(event.message ?? "Voice input is unavailable.");
       const capture = current.current;
       if (!capture || event.sessionId !== capture.sessionId) return;
+      if (event.type === "error") setPhase("uncertain");
       if (event.type === "started") setPhase("recording");
       if (event.type === "transcript" && !capture.cancelled) {
         capture.text = event.text ?? "";
@@ -37,6 +39,7 @@ export function Dictation({
       }
       if (event.type === "stopped") {
         current.current = null;
+        setDiscarding(false);
         setPhase("idle");
         setText("");
         if (
@@ -58,7 +61,7 @@ export function Dictation({
       remove();
       if (current.current) {
         current.current.cancelled = true;
-        void bridge.cancelSpeech();
+        void bridge.cancelSpeech().catch(() => {});
       }
     };
   }, [bridge]);
@@ -69,6 +72,7 @@ export function Dictation({
     if (!bridge) return;
     setError("");
     if (operation === "start") {
+      setDiscarding(false);
       current.current = {
         sessionId: crypto.randomUUID(),
         text: "",
@@ -79,9 +83,20 @@ export function Dictation({
     if (operation === "stop") setPhase("stopping");
     if (operation === "cancel" && current.current) {
       current.current.cancelled = true;
+      setDiscarding(true);
       setPhase("cancelling");
     }
+    const capture = current.current;
     try {
+      if (operation === "cancel") {
+        await bridge.cancelSpeech();
+        if (current.current === capture) {
+          current.current = null;
+          setPhase("idle");
+          setText("");
+        }
+        return;
+      }
       await bridge.speechCommand({
         id: crypto.randomUUID(),
         command: operation,
@@ -91,12 +106,25 @@ export function Dictation({
           : {}),
       });
     } catch {
+      if (
+        ["start", "stop", "cancel"].includes(operation) &&
+        current.current !== capture
+      )
+        return;
       setError(
         "Voice input could not start or stop. Check availability and any recording in another window.",
       );
       if (operation === "start") {
         current.current = null;
         setPhase("idle");
+      } else if (
+        (operation === "stop" || operation === "cancel") &&
+        current.current
+      ) {
+        setPhase("uncertain");
+        setError(
+          "Recording may still be active. Retry Cancel to confirm it has stopped.",
+        );
       }
     }
   }
@@ -140,17 +168,21 @@ export function Dictation({
       ) : (
         <>
           <span role="status">
-            {phase === "recording"
-              ? "Microphone recording"
-              : phase === "starting"
-                ? "Starting microphone…"
-                : phase === "stopping"
-                  ? "Stopping and finalizing…"
-                  : "Cancelling microphone…"}
+            {phase === "uncertain"
+              ? "Recording status unconfirmed"
+              : phase === "recording"
+                ? "Microphone recording"
+                : phase === "starting"
+                  ? "Starting microphone…"
+                  : phase === "stopping"
+                    ? "Stopping and finalizing…"
+                    : "Cancelling microphone…"}
           </span>
           <button
             type="button"
-            disabled={phase !== "recording"}
+            disabled={
+              (phase !== "recording" && phase !== "uncertain") || discarding
+            }
             onClick={() => void command("stop")}
           >
             Stop and use transcript

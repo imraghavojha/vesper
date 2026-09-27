@@ -35,11 +35,13 @@ export function ConversationScreen({
   onDisconnect: () => void;
 }) {
   const [selected, setSelected] = useState<string>();
+  const selectionGeneration = useRef(0);
   const quick =
     !!window.vesperDesktop &&
     new URLSearchParams(location.search).get("quick") === "1";
   const selectConversation = useCallback(
     (id: string) => {
+      selectionGeneration.current++;
       setSelected(id);
       void window.vesperDesktop
         ?.setActiveConversation(connection.workspaceId, id)
@@ -51,14 +53,24 @@ export function ConversationScreen({
     const bridge = window.vesperDesktop;
     if (!bridge) return;
     let current = true;
-    void bridge.activeConversation().then((scope) => {
-      if (current && scope?.workspaceId === connection.workspaceId)
-        setSelected(scope.conversationId);
-    });
+    const generation = selectionGeneration.current;
     const remove = bridge.onActiveConversation((scope) => {
-      if (scope.workspaceId === connection.workspaceId)
+      if (scope.workspaceId === connection.workspaceId) {
+        selectionGeneration.current++;
         setSelected(scope.conversationId);
+      }
     });
+    void bridge
+      .activeConversation()
+      .then((scope) => {
+        if (
+          current &&
+          selectionGeneration.current === generation &&
+          scope?.workspaceId === connection.workspaceId
+        )
+          setSelected(scope.conversationId);
+      })
+      .catch(() => {});
     return () => {
       current = false;
       remove();
