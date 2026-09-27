@@ -30,7 +30,24 @@ type Workspace = {
 };
 const hash = (value: string) =>
   createHash("sha256").update(value).digest("hex");
-export function openStore(directory: string) {
+export function openStore(directory: string, expectedWorkspaceId?: string) {
+  if (expectedWorkspaceId) {
+    const existingPath = resolve(directory, "workspace.sqlite");
+    if (!existsSync(existingPath))
+      throw new Error(
+        "The saved local workspace is missing. Restore its data before reopening Vesper.",
+      );
+    const existing = new DatabaseSync(existingPath, { readOnly: true });
+    try {
+      const identity = existing.prepare("SELECT id FROM workspace").get();
+      if (identity?.id !== expectedWorkspaceId)
+        throw new Error(
+          "The local workspace identity changed. Restore the expected workspace.",
+        );
+    } finally {
+      existing.close();
+    }
+  }
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   chmodSync(directory, 0o700);
   const databasePath = resolve(directory, "workspace.sqlite");

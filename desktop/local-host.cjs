@@ -7,9 +7,20 @@ const { randomUUID } = require("node:crypto");
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const validPort = (port) => Number.isInteger(port) && port > 0 && port <= 65535;
+const RECOVERY_MESSAGES = {
+  LOCAL_WORKSPACE_MISSING:
+    "The saved local workspace is missing or unavailable. Restore its data before starting Vesper.",
+  LOCAL_WORKSPACE_IDENTITY:
+    "The saved local workspace identity is invalid. Restore its saved connection.",
+};
 
 // The worker owns the backend. This module only supervises its private IPC lifecycle.
-function createLocalHost({ modulePath, dataDirectory, onStatus }) {
+function createLocalHost({
+  modulePath,
+  dataDirectory,
+  onStatus,
+  getExpectedWorkspaceId = () => null,
+}) {
   const hostDirectory = path.join(dataDirectory, "local-host");
   const portFile = path.join(hostDirectory, "port");
   let current = { state: "stopped" };
@@ -97,9 +108,33 @@ function createLocalHost({ modulePath, dataDirectory, onStatus }) {
   }
 
   function launch(port) {
+    const expectedWorkspaceId = getExpectedWorkspaceId();
+    let recoveryCode;
+    if (
+      expectedWorkspaceId !== null &&
+      (typeof expectedWorkspaceId !== "string" ||
+        !UUID.test(expectedWorkspaceId))
+    ) {
+      recoveryCode = "LOCAL_WORKSPACE_IDENTITY";
+    } else if (
+      expectedWorkspaceId !== null &&
+      !fs.existsSync(path.join(hostDirectory, "workspace.sqlite"))
+    ) {
+      recoveryCode = "LOCAL_WORKSPACE_MISSING";
+    }
+    if (recoveryCode) {
+      const error = new Error(RECOVERY_MESSAGES[recoveryCode]);
+      error.code = recoveryCode;
+      throw error;
+    }
+    fs.mkdirSync(hostDirectory, { recursive: true, mode: 0o700 });
+    fs.chmodSync(hostDirectory, 0o700);
     const env = { ...process.env };
     for (const key of ["ELECTRON_RUN_AS_NODE", "NODE_OPTIONS", "NODE_PATH"])
       delete env[key];
+    delete env.VESPER_EXPECTED_WORKSPACE_ID;
+    if (expectedWorkspaceId !== null)
+      env.VESPER_EXPECTED_WORKSPACE_ID = expectedWorkspaceId;
     Object.assign(env, {
       VESPER_BIND: "127.0.0.1",
       VESPER_PORT: String(port),
@@ -175,6 +210,8 @@ function createLocalHost({ modulePath, dataDirectory, onStatus }) {
             (port && message.port !== port) ||
             typeof message.workspaceId !== "string" ||
             !UUID.test(message.workspaceId) ||
+            (expectedWorkspaceId !== null &&
+              message.workspaceId !== expectedWorkspaceId) ||
             !child.pid
           ) {
             settle(new Error("The local host reported invalid readiness."));
@@ -263,8 +300,6 @@ function createLocalHost({ modulePath, dataDirectory, onStatus }) {
         report("starting");
         if (stopRequested) throw new Error("Local host startup was stopped.");
         try {
-          fs.mkdirSync(hostDirectory, { recursive: true, mode: 0o700 });
-          fs.chmodSync(hostDirectory, 0o700);
           const port = readPort();
           let info;
           try {
@@ -288,13 +323,17 @@ function createLocalHost({ modulePath, dataDirectory, onStatus }) {
           }
           report("running", { url: info.url, workspaceId: info.workspaceId });
           return info;
-        } catch {
+        } catch (error) {
+          const recoveryMessage = Object.hasOwn(RECOVERY_MESSAGES, error?.code)
+            ? RECOVERY_MESSAGES[error.code]
+            : undefined;
           if (!stopRequested)
             report("failed", {
               message:
+                recoveryMessage ??
                 "The local host could not start. Try again or check local storage.",
             });
-          throw new Error("The local host could not start.");
+          throw new Error(recoveryMessage ?? "The local host could not start.");
         }
       })
       .finally(() => {

@@ -185,6 +185,8 @@ function broadcast(channel, value) {
       win.webContents.send(channel, value);
 }
 const localHost = createLocalHost({
+  getExpectedWorkspaceId: () =>
+    storedConnection?.mode === "local" ? storedConnection.workspaceId : null,
   modulePath: path.resolve(__dirname, "../dist/server/index.js"),
   dataDirectory,
   onStatus(status) {

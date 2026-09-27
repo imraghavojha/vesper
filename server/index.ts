@@ -18,7 +18,10 @@ const port = Number(process.env.VESPER_PORT ?? 4317);
 const address = managed
   ? "127.0.0.1"
   : (process.env.VESPER_BIND ?? "127.0.0.1");
-const store = openStore(resolve(process.env.VESPER_DATA_DIR ?? ".vesper"));
+const store = openStore(
+  resolve(process.env.VESPER_DATA_DIR ?? ".vesper"),
+  managed ? process.env.VESPER_EXPECTED_WORKSPACE_ID : undefined,
+);
 const allowedOrigins = new Set(
   (
     process.env.VESPER_ALLOWED_ORIGINS ??
