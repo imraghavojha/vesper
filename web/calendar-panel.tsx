@@ -38,8 +38,9 @@ function agenda(events: AgendaEvent[]) {
       next++
     )
       if (
-        timed[next]!.icalUid === null ||
-        timed[next]!.icalUid !== event.icalUid
+        event.start < timed[next]!.end &&
+        (timed[next]!.icalUid === null ||
+          timed[next]!.icalUid !== event.icalUid)
       )
         conflicts.add(event).add(timed[next]!);
   });
