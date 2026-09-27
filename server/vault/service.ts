@@ -20,11 +20,7 @@ import {
   wrapRecoveryKey,
   type VaultKey,
 } from "./crypto.js";
-import {
-  readKeyRing,
-  VaultKeyFileError,
-  writeKeyRing,
-} from "./key-file.js";
+import { readKeyRing, VaultKeyFileError, writeKeyRing } from "./key-file.js";
 
 type ErrorCode =
   | "INVALID_INPUT"
@@ -145,7 +141,8 @@ export function createVault(options: VaultOptions) {
   const workspaceId = options.workspaceId;
   const dataDirectory = resolve(options.dataDirectory);
   const keyFilePath =
-    options.keyFilePath ?? resolve(dataDirectory + "-secrets", "vault-keys.json");
+    options.keyFilePath ??
+    resolve(dataDirectory + "-secrets", "vault-keys.json");
   const keyRelative = relative(dataDirectory, resolve(keyFilePath));
   const unsafeKeyPath =
     !isAbsolute(keyFilePath) ||
@@ -178,11 +175,15 @@ export function createVault(options: VaultOptions) {
       `);
     });
   else if (schema.version !== 4) throw unavailable();
+  // IDs are never recycled: an old approved reference must not name a new secret.
+  db.exec(`CREATE TABLE IF NOT EXISTS vault_retired_ids (
+    id TEXT PRIMARY KEY, retiredAt TEXT NOT NULL
+  )`);
 
   function state(): StateRow | undefined {
-    const row = db.prepare("SELECT * FROM vault_state WHERE singleton=1").get() as
-      | StateRow
-      | undefined;
+    const row = db
+      .prepare("SELECT * FROM vault_state WHERE singleton=1")
+      .get() as StateRow | undefined;
     if (row && row.workspaceId !== workspaceId) throw unavailable();
     return row;
   }
@@ -235,14 +236,14 @@ export function createVault(options: VaultOptions) {
     }
   }
   function unlockedKey(row = initialized()): VaultKey {
-    if (locked) throw new VaultError("LOCKED", "Unlock the shared vault first.");
+    if (locked)
+      throw new VaultError("LOCKED", "Unlock the shared vault first.");
     return keyFor(row);
   }
   function record(id: string): EntryRow {
     if (!uuid.test(id)) throw invalid();
     const row = db.prepare("SELECT * FROM vault_entries WHERE id=?").get(id) as
-      | EntryRow
-      | undefined;
+      EntryRow | undefined;
     if (!row) throw new VaultError("NOT_FOUND", "Secure entry not found.");
     return row;
   }
@@ -285,7 +286,9 @@ export function createVault(options: VaultOptions) {
       row = state();
       configured();
       if (!row) {
-        const count = db.prepare("SELECT COUNT(*) AS count FROM vault_entries").get() as { count: number };
+        const count = db
+          .prepare("SELECT COUNT(*) AS count FROM vault_entries")
+          .get() as { count: number };
         if (count.count) throw unavailable();
         return {
           state: "uninitialized",
@@ -299,7 +302,8 @@ export function createVault(options: VaultOptions) {
           state: "missing-key",
           revision: row.revision,
           recoveryAvailable: true,
-          message: "The host key is missing. Use the recovery passphrase to restore it.",
+          message:
+            "The host key is missing. Use the recovery passphrase to restore it.",
         };
       if (locked)
         return {
@@ -314,14 +318,15 @@ export function createVault(options: VaultOptions) {
         state: "ready",
         revision: row.revision,
         recoveryAvailable: true,
-        message: "Encrypted credentials are available to authorized host tasks.",
+        message: "The shared vault is unlocked.",
       };
     } catch {
       return {
         state: "unavailable",
         revision: row?.revision ?? 0,
         recoveryAvailable: !!row,
-        message: "The vault cannot be opened. Check its private host key or restore a matching backup.",
+        message:
+          "The vault cannot be opened. Check its private host key or restore a matching backup.",
       };
     }
   }
@@ -329,7 +334,11 @@ export function createVault(options: VaultOptions) {
     const current = status();
     return {
       status: current,
-      entries: (db.prepare("SELECT * FROM vault_entries ORDER BY createdAt,id").all() as EntryRow[]).map(metadata),
+      entries: (
+        db
+          .prepare("SELECT * FROM vault_entries ORDER BY createdAt,id")
+          .all() as EntryRow[]
+      ).map(metadata),
     };
   }
 
@@ -339,28 +348,56 @@ export function createVault(options: VaultOptions) {
       configured();
       validateRecoveryPassphrase(recoveryPassphrase);
       transaction(db, () => {
-        if (state()) throw new VaultError("CONFLICT", "The shared vault is already initialized. Refresh its status.");
-        const count = db.prepare("SELECT COUNT(*) AS count FROM vault_entries").get() as { count: number };
+        if (state())
+          throw new VaultError(
+            "CONFLICT",
+            "The shared vault is already initialized. Refresh its status.",
+          );
+        const count = db
+          .prepare("SELECT COUNT(*) AS count FROM vault_entries")
+          .get() as { count: number };
         if (count.count) throw unavailable();
         let ring: VaultKey[];
         try {
           ring = readKeyRing(keyFilePath, workspaceId);
         } catch (error) {
-          if (!(error instanceof VaultKeyFileError) || error.code !== "missing") throw unavailable();
+          if (!(error instanceof VaultKeyFileError) || error.code !== "missing")
+            throw unavailable();
           ring = [newVaultKey()];
-          try { writeKeyRing(keyFilePath, workspaceId, ring, "create"); }
-          catch { for (const key of ring) key.bytes.fill(0); throw unavailable(); }
+          try {
+            writeKeyRing(keyFilePath, workspaceId, ring, "create");
+          } catch {
+            for (const key of ring) key.bytes.fill(0);
+            throw unavailable();
+          }
         }
         try {
           // Reuse an exclusively published key after interrupted initialization.
           if (ring.length !== 1) throw unavailable();
           const key = ring[0]!;
           const now = new Date().toISOString();
-          const sealed = sealValue(key, verifier, stateAad(workspaceId, key.id));
-          const recovery = wrapRecoveryKey(key, workspaceId, recoveryPassphrase);
-          db.prepare("INSERT INTO vault_state VALUES (1,?,?,?,?,1,?,?)").run(workspaceId, key.id, JSON.stringify(sealed), JSON.stringify(recovery), now, now);
+          const sealed = sealValue(
+            key,
+            verifier,
+            stateAad(workspaceId, key.id),
+          );
+          const recovery = wrapRecoveryKey(
+            key,
+            workspaceId,
+            recoveryPassphrase,
+          );
+          db.prepare("INSERT INTO vault_state VALUES (1,?,?,?,?,1,?,?)").run(
+            workspaceId,
+            key.id,
+            JSON.stringify(sealed),
+            JSON.stringify(recovery),
+            now,
+            now,
+          );
           options.appendChange("vault", 1);
-        } finally { for (const key of ring) key.bytes.fill(0); }
+        } finally {
+          for (const key of ring) key.bytes.fill(0);
+        }
       });
       locked = false;
       options.notify();
@@ -370,40 +407,94 @@ export function createVault(options: VaultOptions) {
       if (
         !uuid.test(input.id) ||
         !["password", "token", "oauth"].includes(input.kind) ||
-        typeof input.label !== "string" || !input.label.trim() || input.label.length > 80 ||
-        typeof input.accountId !== "string" || !input.accountId.trim() || input.accountId.length > 256 ||
-        (input.secret !== undefined && (typeof input.secret !== "string" || !input.secret.length || Buffer.byteLength(input.secret, "utf8") > MAX_VAULT_SECRET_BYTES))
-      ) throw invalid();
+        typeof input.label !== "string" ||
+        !input.label.trim() ||
+        input.label.length > 80 ||
+        typeof input.accountId !== "string" ||
+        !input.accountId.trim() ||
+        input.accountId.length > 256 ||
+        (input.secret !== undefined &&
+          (typeof input.secret !== "string" ||
+            !input.secret.length ||
+            /\p{Cs}/u.test(input.secret) ||
+            Buffer.byteLength(input.secret, "utf8") > MAX_VAULT_SECRET_BYTES))
+      )
+        throw invalid();
       const allowedOrigins = origins(input.origins);
       const result = transaction(db, () => {
         const key = unlockedKey();
         let plaintext: Buffer | undefined;
         try {
-          const prior = db.prepare("SELECT * FROM vault_entries WHERE id=?").get(input.id) as EntryRow | undefined;
+          if (
+            db
+              .prepare("SELECT id FROM vault_retired_ids WHERE id=?")
+              .get(input.id)
+          )
+            throw new VaultError(
+              "CONFLICT",
+              "This secure entry was deleted. Add a new entry instead of reusing its identity.",
+            );
+          const prior = db
+            .prepare("SELECT * FROM vault_entries WHERE id=?")
+            .get(input.id) as EntryRow | undefined;
           checkRevision(prior?.revision ?? 0, input.expectedRevision);
           if (prior) active(prior);
           if (!prior) {
-            const count = db.prepare("SELECT COUNT(*) AS count FROM vault_entries").get() as { count: number };
-            if (count.count >= MAX_VAULT_ENTRIES) throw new VaultError("CONFLICT", "Remove an unused secure entry before adding another.");
+            const count = db
+              .prepare("SELECT COUNT(*) AS count FROM vault_entries")
+              .get() as { count: number };
+            if (count.count >= MAX_VAULT_ENTRIES)
+              throw new VaultError(
+                "CONFLICT",
+                "Remove an unused secure entry before adding another.",
+              );
             if (input.secret === undefined) throw invalid();
           }
-          plaintext = input.secret !== undefined ? Buffer.from(input.secret, "utf8") : decrypt(key, prior!);
+          plaintext =
+            input.secret !== undefined
+              ? Buffer.from(input.secret, "utf8")
+              : decrypt(key, prior!);
           const now = new Date().toISOString();
           const entry: VaultEntryMetadata = {
-            id: input.id, kind: input.kind, label: input.label.trim(), accountId: input.accountId,
-            origins: allowedOrigins, revision: (prior?.revision ?? 0) + 1,
-            createdAt: prior?.createdAt ?? now, updatedAt: now,
-            lastUsedAt: prior?.lastUsedAt ?? null, revokedAt: null,
+            id: input.id,
+            kind: input.kind,
+            label: input.label.trim(),
+            accountId: input.accountId,
+            origins: allowedOrigins,
+            revision: (prior?.revision ?? 0) + 1,
+            createdAt: prior?.createdAt ?? now,
+            updatedAt: now,
+            lastUsedAt: prior?.lastUsedAt ?? null,
+            revokedAt: null,
           };
-          const sealed = sealValue(key, plaintext, entryAad(workspaceId, entry));
-          db.prepare(`INSERT INTO vault_entries VALUES (?,?,?,?,?,?,?,?,?,?,?)
+          const sealed = sealValue(
+            key,
+            plaintext,
+            entryAad(workspaceId, entry),
+          );
+          db.prepare(
+            `INSERT INTO vault_entries VALUES (?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(id) DO UPDATE SET kind=excluded.kind,label=excluded.label,accountId=excluded.accountId,
-            originsJson=excluded.originsJson,revision=excluded.revision,updatedAt=excluded.updatedAt,sealedJson=excluded.sealedJson`)
-            .run(entry.id, entry.kind, entry.label, entry.accountId, JSON.stringify(entry.origins), entry.revision,
-              entry.createdAt, entry.updatedAt, entry.lastUsedAt, entry.revokedAt, JSON.stringify(sealed));
+            originsJson=excluded.originsJson,revision=excluded.revision,updatedAt=excluded.updatedAt,sealedJson=excluded.sealedJson`,
+          ).run(
+            entry.id,
+            entry.kind,
+            entry.label,
+            entry.accountId,
+            JSON.stringify(entry.origins),
+            entry.revision,
+            entry.createdAt,
+            entry.updatedAt,
+            entry.lastUsedAt,
+            entry.revokedAt,
+            JSON.stringify(sealed),
+          );
           changed(entry.id);
           return entry;
-        } finally { plaintext?.fill(0); key.bytes.fill(0); }
+        } finally {
+          plaintext?.fill(0);
+          key.bytes.fill(0);
+        }
       });
       options.notify();
       return result;
@@ -415,8 +506,9 @@ export function createVault(options: VaultOptions) {
         checkRevision(row.revision, input.expectedRevision);
         active(row);
         const now = new Date().toISOString();
-        db.prepare("UPDATE vault_entries SET sealedJson=NULL,revokedAt=?,updatedAt=?,revision=revision+1 WHERE id=?")
-          .run(now, now, row.id);
+        db.prepare(
+          "UPDATE vault_entries SET sealedJson=NULL,revokedAt=?,updatedAt=?,revision=revision+1 WHERE id=?",
+        ).run(now, now, row.id);
         changed(row.id);
         return metadata(record(row.id));
       });
@@ -428,6 +520,10 @@ export function createVault(options: VaultOptions) {
         initialized();
         const row = record(input.id);
         checkRevision(row.revision, input.expectedRevision);
+        db.prepare("INSERT INTO vault_retired_ids VALUES (?,?)").run(
+          row.id,
+          new Date().toISOString(),
+        );
         db.prepare("DELETE FROM vault_entries WHERE id=?").run(row.id);
         changed(row.id);
       });
@@ -454,20 +550,47 @@ export function createVault(options: VaultOptions) {
       validateRecoveryPassphrase(recoveryPassphrase);
       transaction(db, () => {
         const row = initialized();
-        if (existsSync(keyFilePath)) throw new VaultError("CONFLICT", "A host key file already exists. Recovery does not replace it; restore the matching key or move a damaged file aside privately first.");
+        if (existsSync(keyFilePath))
+          throw new VaultError(
+            "CONFLICT",
+            "A host key file already exists. Recovery does not replace it; restore the matching key or move a damaged file aside privately first.",
+          );
         let key: VaultKey;
-        try { key = unwrapRecoveryKey(JSON.parse(row.recoveryJson), workspaceId, recoveryPassphrase); }
-        catch { throw new VaultError("UNAVAILABLE", "The recovery passphrase or recovery data could not unlock this vault."); }
+        try {
+          key = unwrapRecoveryKey(
+            JSON.parse(row.recoveryJson),
+            workspaceId,
+            recoveryPassphrase,
+          );
+        } catch {
+          throw new VaultError(
+            "UNAVAILABLE",
+            "The recovery passphrase or recovery data could not unlock this vault.",
+          );
+        }
         try {
           if (key.id !== row.keyId) throw unavailable();
-          const proof = openValue(key, JSON.parse(row.verifierJson), stateAad(workspaceId, row.keyId));
-          try { if (!proof.equals(verifier)) throw unavailable(); } finally { proof.fill(0); }
-          for (const entry of db.prepare("SELECT * FROM vault_entries WHERE revokedAt IS NULL").all() as EntryRow[]) {
-            const plaintext = decrypt(key, entry); plaintext.fill(0);
+          const proof = openValue(
+            key,
+            JSON.parse(row.verifierJson),
+            stateAad(workspaceId, row.keyId),
+          );
+          try {
+            if (!proof.equals(verifier)) throw unavailable();
+          } finally {
+            proof.fill(0);
+          }
+          for (const entry of db
+            .prepare("SELECT * FROM vault_entries WHERE revokedAt IS NULL")
+            .all() as EntryRow[]) {
+            const plaintext = decrypt(key, entry);
+            plaintext.fill(0);
           }
           writeKeyRing(keyFilePath, workspaceId, [key], "create");
           changed("vault");
-        } finally { key.bytes.fill(0); }
+        } finally {
+          key.bytes.fill(0);
+        }
       });
       locked = false;
       options.notify();
@@ -478,7 +601,11 @@ export function createVault(options: VaultOptions) {
       validateRecoveryPassphrase(input.recoveryPassphrase);
       const next = newVaultKey();
       try {
-        const recovery = wrapRecoveryKey(next, workspaceId, input.recoveryPassphrase);
+        const recovery = wrapRecoveryKey(
+          next,
+          workspaceId,
+          input.recoveryPassphrase,
+        );
         transaction(db, () => {
           const row = initialized();
           checkRevision(row.revision, input.expectedRevision);
@@ -486,66 +613,120 @@ export function createVault(options: VaultOptions) {
           try {
             // The DB write lock serializes keyring changes with other hosts/admin commands.
             writeKeyRing(keyFilePath, workspaceId, [previous, next], "replace");
-            for (const entry of db.prepare("SELECT * FROM vault_entries WHERE revokedAt IS NULL").all() as EntryRow[]) {
+            for (const entry of db
+              .prepare("SELECT * FROM vault_entries WHERE revokedAt IS NULL")
+              .all() as EntryRow[]) {
               const plaintext = decrypt(previous, entry);
               try {
-                const sealed = sealValue(next, plaintext, entryAad(workspaceId, metadata(entry)));
-                db.prepare("UPDATE vault_entries SET sealedJson=? WHERE id=?").run(JSON.stringify(sealed), entry.id);
-              } finally { plaintext.fill(0); }
+                const sealed = sealValue(
+                  next,
+                  plaintext,
+                  entryAad(workspaceId, metadata(entry)),
+                );
+                db.prepare(
+                  "UPDATE vault_entries SET sealedJson=? WHERE id=?",
+                ).run(JSON.stringify(sealed), entry.id);
+              } finally {
+                plaintext.fill(0);
+              }
             }
-            const sealedVerifier = sealValue(next, verifier, stateAad(workspaceId, next.id));
-            db.prepare("UPDATE vault_state SET keyId=?,verifierJson=?,recoveryJson=? WHERE singleton=1")
-              .run(next.id, JSON.stringify(sealedVerifier), JSON.stringify(recovery));
+            const sealedVerifier = sealValue(
+              next,
+              verifier,
+              stateAad(workspaceId, next.id),
+            );
+            db.prepare(
+              "UPDATE vault_state SET keyId=?,verifierJson=?,recoveryJson=? WHERE singleton=1",
+            ).run(
+              next.id,
+              JSON.stringify(sealedVerifier),
+              JSON.stringify(recovery),
+            );
             changed("vault");
-          } finally { previous.bytes.fill(0); }
+          } finally {
+            previous.bytes.fill(0);
+          }
         });
         // Recheck under a fresh lock. Never overwrite another process's newer staged ring.
         transaction(db, () => {
           const current = initialized();
           if (current.keyId !== next.id) return;
           const checked = keyFor(current);
-          try { writeKeyRing(keyFilePath, workspaceId, [checked], "replace"); }
-          finally { checked.bytes.fill(0); }
+          try {
+            writeKeyRing(keyFilePath, workspaceId, [checked], "replace");
+          } finally {
+            checked.bytes.fill(0);
+          }
         });
       } catch (error) {
         // Both keys remain available after an interrupted transaction. Never restore a stale ring.
         if (error instanceof VaultError) throw error;
-        throw new VaultError("UNAVAILABLE", "Key rotation could not be confirmed. Refresh vault status before retrying; no key was silently replaced.");
-      } finally { next.bytes.fill(0); }
+        throw new VaultError(
+          "UNAVAILABLE",
+          "Key rotation could not be confirmed. Refresh vault status before retrying; no key was silently replaced.",
+        );
+      } finally {
+        next.bytes.fill(0);
+      }
       options.notify();
       return snapshot();
     },
     // Trusted host code only. Not a route, provider tool, or substitute for action approval.
     // The callback's result is discarded and its errors are redacted.
     async withSecret(
-      scope: { id: string; accountId: string; origin: string },
+      scope: {
+        id: string;
+        accountId: string;
+        origin: string;
+        expectedRevision?: number;
+      },
       consume: (secret: Buffer) => void | Promise<void>,
     ): Promise<void> {
       const plaintext = transaction(db, () => {
         const entry = record(scope.id);
         active(entry);
+        if (scope.expectedRevision !== undefined)
+          checkRevision(entry.revision, scope.expectedRevision);
         const allowed = metadata(entry).origins;
         let requested: string;
         try {
           requested = origins([scope.origin])[0]!;
           if (scope.origin !== requested) throw invalid();
         } catch {
-          throw new VaultError("SCOPE_MISMATCH", "Credential origin or account does not match this operation.");
+          throw new VaultError(
+            "SCOPE_MISMATCH",
+            "Credential origin or account does not match this operation.",
+          );
         }
         if (entry.accountId !== scope.accountId || !allowed.includes(requested))
-          throw new VaultError("SCOPE_MISMATCH", "Credential origin or account does not match this operation.");
+          throw new VaultError(
+            "SCOPE_MISMATCH",
+            "Credential origin or account does not match this operation.",
+          );
         const key = unlockedKey();
         try {
           const value = decrypt(key, entry);
-          db.prepare("UPDATE vault_entries SET lastUsedAt=? WHERE id=?").run(new Date().toISOString(), entry.id);
+          db.prepare("UPDATE vault_entries SET lastUsedAt=? WHERE id=?").run(
+            new Date().toISOString(),
+            entry.id,
+          );
           changed(entry.id);
           return value;
-        } finally { key.bytes.fill(0); }
+        } finally {
+          key.bytes.fill(0);
+        }
       });
       options.notify();
-      try { await consume(plaintext); }
-      catch { throw new VaultError("USE_FAILED", "Credential use failed."); }
-      finally { plaintext.fill(0); }
+      try {
+        await consume(plaintext);
+      } catch {
+        throw new VaultError(
+          "USE_FAILED",
+          "Credential use did not return a confirmed result.",
+        );
+      } finally {
+        plaintext.fill(0);
+      }
     },
   };
 }

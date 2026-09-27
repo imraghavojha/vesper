@@ -5,6 +5,9 @@ dist/
 .env.*
 !.env.example
 .vesper/
+.vesper-secrets/
+vault-keys.json
+.vault-keys.json.*.tmp
 .t3/
 *.sqlite
 *.sqlite-*

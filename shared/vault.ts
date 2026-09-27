@@ -3,11 +3,7 @@ export const MAX_VAULT_ENTRIES = 256;
 
 export type VaultEntryKind = "password" | "token" | "oauth";
 export type VaultState =
-  | "uninitialized"
-  | "ready"
-  | "locked"
-  | "missing-key"
-  | "unavailable";
+  "uninitialized" | "ready" | "locked" | "missing-key" | "unavailable";
 
 export type VaultStatus = {
   state: VaultState;

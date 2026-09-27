@@ -8,6 +8,8 @@ Also read [architecture and concrete reuse](docs/architecture-and-reuse.md). The
 
 ## Current state
 
+- IMR-9 adds the shared host vault foundation: AES-256-GCM credential records, private external key file, passphrase-wrapped recovery, metadata-only client responses, exact origin/account checks, lock/revoke states and recoverable rotation. Secure Store entry bypasses chat and never reads saved values back to clients. See [vault operations](docs/vault.md). OAuth consent, connector dispatch, browser filling/waiting-task resume, worker filesystem isolation and Android acceptance remain open; storing a credential does not prove any external account connection.
+
 - The active phase is polished Mac-only delivery. Claude Opus 5.5 owns the reference-based UI replacement; the existing functional scaffold is not an accepted final design. Use fresh Muse frames and interaction evidence before implementing visual changes. Android and Calendar implementation wait while the Mac UI is corrected.
 
 - IMR-14 adds a Mac quick-chat window using the same conversations, provider runs and encrypted drafts as the full window. Shortcut conflicts are visible and do not alter other apps. Explicit voice controls use a bundled Apple on-device speech helper; voice produces an unsent draft. Actual microphone permission/capture still requires a present-user verification; synthetic file transcription is separate evidence. The complete reference layout, motion, attachments/search/reactions and Android remain open.

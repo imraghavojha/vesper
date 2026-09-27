@@ -96,12 +96,16 @@ export function openStore(directory: string, expectedWorkspaceId?: string) {
   const conversations = createConversations(db, () => updates.emit("changed"));
   const vault = createVault({
     database: db,
-    workspaceId: (db.prepare("SELECT id FROM workspace").get() as { id: string }).id,
+    workspaceId: (
+      db.prepare("SELECT id FROM workspace").get() as { id: string }
+    ).id,
     dataDirectory: directory,
     keyFilePath: process.env.VESPER_VAULT_KEY_FILE,
     startLocked: process.env.VESPER_VAULT_START_LOCKED === "1",
     appendChange: conversations.appendVaultChange,
-    notify: () => { updates.emit("changed"); },
+    notify: () => {
+      updates.emit("changed");
+    },
   });
   const codePath = resolve(directory, "pairing-code");
   function createPairingCode() {
@@ -193,8 +197,15 @@ export function openStore(directory: string, expectedWorkspaceId?: string) {
     ...conversations,
     vault,
     assertDeviceActive(id: string) {
-      if (!db.prepare("SELECT id FROM devices WHERE id=? AND revokedAt IS NULL").get(id))
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "This device no longer has access." });
+      if (
+        !db
+          .prepare("SELECT id FROM devices WHERE id=? AND revokedAt IS NULL")
+          .get(id)
+      )
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "This device no longer has access.",
+        });
     },
     subscribeChanges(listener: () => void) {
       updates.on("changed", listener);

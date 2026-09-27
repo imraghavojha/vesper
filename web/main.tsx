@@ -31,10 +31,7 @@ type SavedConnection = Connection & {
 };
 /** Sections the native settings window may be opened at. */
 export type SettingsEntrySection =
-  | "general"
-  | "providers"
-  | "devices"
-  | "dictation";
+  "general" | "providers" | "devices" | "dictation" | "secure";
 const settingsWindow =
   !!window.vesperDesktop &&
   new URLSearchParams(location.search).get("settings") === "1";
@@ -286,8 +283,7 @@ function App() {
         // The settings window never pairs or creates workspaces itself.
         <main className="workspace">
           <p role="status">
-            Connect a workspace in the main Vesper window, then reopen
-            Settings.
+            Connect a workspace in the main Vesper window, then reopen Settings.
           </p>
         </main>
       ) : connection && view === "chat" ? (
@@ -393,8 +389,8 @@ function Welcome({
         </p>
       )}
       <p className="scope-note">
-        Chat with Claude using your own account. Dictation uses on-device
-        speech where this Mac supports it. Connectors and scheduled work aren’t
+        Chat with Claude using your own account. Dictation uses on-device speech
+        where this Mac supports it. Connectors and scheduled work aren’t
         available yet.
       </p>
     </main>

@@ -64,6 +64,7 @@ const settingsSections = new Set([
   "providers",
   "devices",
   "dictation",
+  "secure",
 ]);
 let quickChat = null;
 let activeConversation = null;

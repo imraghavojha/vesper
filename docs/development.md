@@ -35,6 +35,8 @@ The host creates `.vesper/workspace.sqlite` and an `initialized` marker. Keep bo
 
 ## Runtime and SQLite
 
+The shared encrypted vault and its operator backup/recovery workflow are documented in [vault operations](vault.md). Secure Store values belong to the host, not the device's `safeStorage` connection/draft files. Its raw key file stays outside the database directory and is excluded from database backups.
+
 Electron 44.4.5 and the independently hosted Node 24.21.0 both include Node's built-in SQLite 3.53.4. Vesper uses the common `node:sqlite` API, so the Mac app does not bundle a second Node runtime or rebuild a native SQLite addon for Electron's different ABI. Existing workspace databases retain their schema, IDs and device credentials.
 
 Node 24.21 documents `node:sqlite` as stability 1.2, release candidate, not fully stable. Keep Node and Electron pinned and verify upgrades against both runtimes. The application uses the small synchronous prepare/get/all/run API and explicit `BEGIN IMMEDIATE`, `COMMIT` and `ROLLBACK` transactions. It does not use changesets or a second synchronization database. See the [pinned Node SQLite documentation](https://raw.githubusercontent.com/nodejs/node/v24.21.0/doc/api/sqlite.md) and [Electron utility-process API](https://www.electronjs.org/docs/latest/api/utility-process).

@@ -16,6 +16,7 @@
     "start": "node dist/server/index.js",
     "check": "node scripts/check-repository.mjs && npm run typecheck && npm run lint && npm run check:desktop && npm run build",
     "pairing-code": "tsx server/pairing.ts",
+    "backup": "tsx server/backup.ts",
     "format": "prettier --write server shared web desktop",
     "check:desktop": "node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/local-host.cjs && node --check desktop/drafts.cjs && node --check desktop/draft-coordinator.cjs && node --check desktop/speech.cjs && node --check desktop/quick-chat.cjs && node --check scripts/package-desktop.mjs && node --check scripts/build-native.mjs",
     "build:native": "node scripts/build-native.mjs",
