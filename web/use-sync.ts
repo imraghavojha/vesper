@@ -143,6 +143,13 @@ export function useSync(
     refreshRef.current = refreshState;
     function connect() {
       if (!active || denied) return;
+      if (
+        socket &&
+        (socket.readyState === WebSocket.OPEN ||
+          socket.readyState === WebSocket.CONNECTING)
+      )
+        return;
+      clearTimeout(timer);
       authenticated = false;
       setOnline(false);
       const endpoint = new URL("/sync", connection.url);
@@ -188,8 +195,9 @@ export function useSync(
         setError(
           "Live connection unavailable. Your unsent draft stays on this device.",
         );
-        if (attempts < 8)
-          timer = setTimeout(connect, Math.min(250 * 2 ** attempts++, 8000));
+        const delay = Math.min(250 * 2 ** attempts, 30000);
+        attempts = Math.min(attempts + 1, 8);
+        timer = setTimeout(connect, delay);
       };
       current.onerror = () => {
         /* onclose owns reconnect and visible connection state. */
@@ -198,13 +206,23 @@ export function useSync(
     connect();
     void refreshState();
     const focus = () => {
-      if (active && !denied) void refreshState();
+      if (active && !denied) {
+        connect();
+        void refreshState();
+      }
+    };
+    const visible = () => {
+      if (document.visibilityState === "visible") focus();
     };
     window.addEventListener("focus", focus);
+    window.addEventListener("online", focus);
+    document.addEventListener("visibilitychange", visible);
     return () => {
       active = false;
       clearTimeout(timer);
       window.removeEventListener("focus", focus);
+      window.removeEventListener("online", focus);
+      document.removeEventListener("visibilitychange", visible);
       socket?.close();
     };
   }, [

@@ -41,3 +41,16 @@ export async function messageRequestHash(
     byte.toString(16).padStart(2, "0"),
   ).join("");
 }
+
+export async function createConversationRequestHash(
+  title: string,
+): Promise<string> {
+  const input = JSON.stringify(["createConversation", { title }]);
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(input),
+  );
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}

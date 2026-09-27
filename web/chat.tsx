@@ -7,11 +7,17 @@ import type {
   Message,
 } from "../shared/sync.js";
 import { useSync, syncError } from "./use-sync.js";
-import { messageRequestHash } from "../shared/sync.js";
+import { TRPCClientError } from "@trpc/client";
+import {
+  messageRequestHash,
+  createConversationRequestHash,
+} from "../shared/sync.js";
 import { loadDraft, saveDraft } from "./draft-storage.js";
 import "./chat.css";
 
 type Saved = Connection & { workspaceId: string; mode?: "local" | "remote" };
+type CreationIntent = { requestId: string; title: string };
+const pendingCreations = new Map<string, CreationIntent>();
 export function ConversationScreen({
   connection,
   onWorkspace,
@@ -25,8 +31,13 @@ export function ConversationScreen({
 }) {
   const [selected, setSelected] = useState<string>();
   const sync = useSync(connection, selected, onRevoked);
-  const [title, setTitle] = useState("");
-  const [creating, setCreating] = useState(false);
+  const [creationIntent, setCreationIntent] = useState<CreationIntent | null>(
+    () => pendingCreations.get(connection.workspaceId) ?? null,
+  );
+  const creationRef = useRef(creationIntent);
+  const creationPosting = useRef(false);
+  const [title, setTitle] = useState(creationIntent?.title ?? "");
+  const [creating, setCreating] = useState(creationIntent !== null);
   const [editing, setEditing] = useState<{
     id: string;
     revision: number;
@@ -49,6 +60,108 @@ export function ConversationScreen({
   useEffect(() => {
     if (appearance) document.documentElement.dataset.appearance = appearance;
   }, [appearance]);
+  const clearCreation = useCallback(
+    (intent: CreationIntent) => {
+      if (creationRef.current?.requestId !== intent.requestId) return false;
+      if (
+        pendingCreations.get(connection.workspaceId)?.requestId ===
+        intent.requestId
+      )
+        pendingCreations.delete(connection.workspaceId);
+      creationRef.current = null;
+      setCreationIntent(null);
+      return true;
+    },
+    [connection.workspaceId],
+  );
+  const finishCreation = useCallback(
+    (intent: CreationIntent, id: string) => {
+      if (!clearCreation(intent)) return;
+      setCreating(false);
+      setEditing(null);
+      setTitle("");
+      setSelected(id);
+      setError("");
+      void sync.refresh();
+    },
+    [clearCreation, sync.refresh],
+  );
+  const checkCreation = useCallback(async () => {
+    const intent = creationRef.current;
+    if (!intent) return false;
+    try {
+      const receipt = await sync.api.mutationReceipt.query({
+        requestId: intent.requestId,
+      });
+      if (
+        receipt?.operation === "createConversation" &&
+        receipt.payloadHash ===
+          (await createConversationRequestHash(intent.title))
+      ) {
+        finishCreation(intent, receipt.result.id);
+        return true;
+      }
+      if (receipt && clearCreation(intent)) {
+        setTitle(intent.title);
+        setCreating(true);
+        setError(
+          "This creation conflicted with another saved action. Your title is kept; submit it again.",
+        );
+      }
+    } catch {
+      /* Read-only recovery never repeats the creation. */
+    }
+    return false;
+  }, [sync.api, finishCreation, clearCreation]);
+  useEffect(() => {
+    if (creationIntent && sync.online) void checkCreation();
+  }, [
+    creationIntent?.requestId,
+    sync.online,
+    sync.snapshot?.cursor,
+    checkCreation,
+  ]);
+  async function createChat() {
+    if (!sync.online || busy || creationPosting.current) return;
+    const firstAttempt = creationRef.current === null;
+    let intent = creationRef.current;
+    if (!intent) {
+      const normalized = title.trim();
+      if (!normalized) {
+        setError("Enter a chat name.");
+        return;
+      }
+      intent = { requestId: crypto.randomUUID(), title: normalized };
+      pendingCreations.set(connection.workspaceId, intent);
+      creationRef.current = intent;
+      setCreationIntent(intent);
+      setTitle(intent.title);
+    }
+    creationPosting.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await sync.api.createConversation.mutate(intent);
+      finishCreation(intent, result.id);
+    } catch (cause) {
+      if (creationRef.current?.requestId === intent.requestId) {
+        setError(syncError(cause));
+        if (
+          firstAttempt &&
+          cause instanceof TRPCClientError &&
+          ["BAD_REQUEST", "NOT_FOUND"].includes(cause.data?.code)
+        ) {
+          if (clearCreation(intent)) {
+            setTitle(intent.title);
+            setCreating(true);
+          }
+        } else await checkCreation();
+      }
+    } finally {
+      creationPosting.current = false;
+      setBusy(false);
+    }
+  }
   async function mutate(operation: () => Promise<unknown>) {
     setBusy(true);
     setError("");
@@ -97,7 +210,7 @@ export function ConversationScreen({
           <button
             aria-label="New side chat"
             title="New side chat"
-            disabled={!sync.online || busy}
+            disabled={!sync.online || busy || !!creationIntent}
             onClick={() => {
               formRequest.current = null;
               setCreating(true);
@@ -117,8 +230,10 @@ export function ConversationScreen({
               }
               onClick={() => {
                 setSelected(item.id);
-                setCreating(false);
-                setEditing(null);
+                if (!creationRef.current) {
+                  setCreating(false);
+                  setEditing(null);
+                }
               }}
             >
               <span>{item.kind === "main" ? "◫" : "○"}</span>
@@ -131,24 +246,20 @@ export function ConversationScreen({
             className="conversation-form"
             onSubmit={(event) => {
               event.preventDefault();
+              if (!editing) {
+                void createChat();
+                return;
+              }
               void mutate(async () => {
-                if (editing)
-                  await sync.api.renameConversation.mutate({
-                    requestId: requestFor(
-                      "renameConversation",
-                      editing.id + ":" + editing.revision + ":" + title,
-                    ),
-                    id: editing.id,
-                    title,
-                    expectedRevision: editing.revision,
-                  });
-                else {
-                  const result = await sync.api.createConversation.mutate({
-                    requestId: requestFor("createConversation", title),
-                    title,
-                  });
-                  setSelected(result.id);
-                }
+                await sync.api.renameConversation.mutate({
+                  requestId: requestFor(
+                    "renameConversation",
+                    editing.id + ":" + editing.revision + ":" + title,
+                  ),
+                  id: editing.id,
+                  title,
+                  expectedRevision: editing.revision,
+                });
                 formRequest.current = null;
                 setCreating(false);
                 setEditing(null);
@@ -161,15 +272,28 @@ export function ConversationScreen({
             <input
               id="conversation-title"
               value={title}
+              disabled={busy || !!creationIntent}
               maxLength={80}
               required
               autoFocus
               onChange={(event) => setTitle(event.target.value)}
             />
             <div className="chat-form-actions">
-              <button disabled={busy || !sync.online}>Save</button>
+              <button disabled={busy || !sync.online}>
+                {creationIntent ? "Retry original creation" : "Save"}
+              </button>
+              {creationIntent && (
+                <button
+                  type="button"
+                  disabled={!sync.online || busy}
+                  onClick={() => void checkCreation()}
+                >
+                  Check status
+                </button>
+              )}
               <button
                 type="button"
+                disabled={busy || !!creationIntent}
                 onClick={() => {
                   setCreating(false);
                   setEditing(null);
@@ -178,6 +302,12 @@ export function ConversationScreen({
                 Cancel
               </button>
             </div>
+            {creationIntent && (
+              <p className="field-help" role="status">
+                Creation is awaiting confirmation. Its original name is kept
+                until the saved result is known.
+              </p>
+            )}
           </form>
         )}
         <div className="compact-appearance">
@@ -225,7 +355,7 @@ export function ConversationScreen({
           </div>
           <button
             aria-label="Rename conversation"
-            disabled={!conversation || !sync.online || busy}
+            disabled={!conversation || !sync.online || busy || !!creationIntent}
             onClick={() => {
               if (conversation) {
                 formRequest.current = null;
@@ -351,16 +481,22 @@ function ConversationBody({
     mounted.current = true;
     let current = true;
     void loadDraft(workspaceId, conversationId)
-      .then((value) => {
+      .then(({ draft: value, saved }) => {
         if (!current) return;
         draftRef.current = value;
         setDraft(value);
         setReady(true);
         setSavedState(
-          value.text || value.pending
-            ? "Draft saved on this device"
-            : "No unsent draft",
+          saved
+            ? value.text || value.pending
+              ? "Draft saved on this device"
+              : "No unsent draft"
+            : "Draft not saved",
         );
+        if (!saved)
+          setDraftError(
+            "The latest draft is kept in memory but was not saved. Retry saving before closing the app.",
+          );
       })
       .catch(() => {
         if (current) {
@@ -411,9 +547,7 @@ function ConversationBody({
       draftRef.current = next;
       setDraft(next);
       setSavedState("Saving draft…");
-      const operation = queue.current
-        .catch(() => {})
-        .then(() => saveDraft(workspaceId, conversationId, next));
+      const operation = saveDraft(workspaceId, conversationId, next);
       queue.current = operation;
       void operation.then(
         () => {
@@ -461,11 +595,12 @@ function ConversationBody({
         requestId: pending.requestId,
       });
       if (!mounted.current) return;
-      if (
+      const matches =
         receipt?.operation === "sendMessage" &&
         receipt.payloadHash ===
-          (await messageRequestHash(conversationId, pending.text))
-      ) {
+          (await messageRequestHash(conversationId, pending.text));
+      if (!mounted.current) return;
+      if (matches) {
         await acknowledge(pending.requestId);
         await sync.refresh();
       } else if (receipt) {
@@ -593,9 +728,16 @@ function ConversationBody({
       </div>
       <div className="composer-area">
         {(draftError || sendError) && (
-          <p className="chat-notice" role="alert">
-            {draftError || sendError}
-          </p>
+          <div className="chat-notice" role="alert">
+            <p>{draftError || sendError}</p>
+            {draftError && ready && (
+              <button
+                onClick={() => void persist(draftRef.current).catch(() => {})}
+              >
+                Retry saving draft
+              </button>
+            )}
+          </div>
         )}
         {pending && (
           <div className="pending-message" role="status">

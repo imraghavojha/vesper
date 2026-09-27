@@ -18,7 +18,7 @@
     "pairing-code": "tsx server/pairing.ts",
     "format": "prettier --write server shared web desktop",
     "check:desktop": "node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/local-host.cjs && node --check scripts/package-desktop.mjs && node --check desktop/drafts.cjs",
-    "package:mac": "npm run build && node scripts/package-desktop.mjs"
+    "package:mac": "npm run check && node scripts/package-desktop.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "5.104.0",
