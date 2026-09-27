@@ -186,6 +186,7 @@ async function writeDraft(
   conversationId: string,
   name: string,
   draft: Draft,
+  operationRevision: number,
 ) {
   const empty = !draft.text && !draft.pending;
   if (window.vesperDesktop) {
@@ -201,6 +202,10 @@ async function writeDraft(
       state.remoteRevision,
     );
     state.remoteRevision = result.revision;
+    // A no-op can acknowledge this exact value without authorizing later
+    // edits that were already queued against the stale base.
+    if (result.staleEqual && state.revision > operationRevision)
+      state.conflicted = true;
     if (!result.ok) {
       state.conflicted = true;
       throw new Error(
@@ -236,7 +241,7 @@ export function saveDraft(
     .then(() => {
       if (resolveConflict) state.conflicted = false;
     })
-    .then(() => writeDraft(workspaceId, conversationId, name, value))
+    .then(() => writeDraft(workspaceId, conversationId, name, value, revision))
     .then(() => {
       state.acknowledged = revision;
     });

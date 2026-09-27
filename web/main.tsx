@@ -45,7 +45,7 @@ declare global {
         conversationId: string,
         draft: Draft | null,
         revision: number,
-      ): Promise<{ ok: boolean; revision: number }>;
+      ): Promise<{ ok: boolean; revision: number; staleEqual?: boolean }>;
       onDraftChanged(
         callback: (scope: {
           workspaceId: string;

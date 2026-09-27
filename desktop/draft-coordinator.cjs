@@ -27,7 +27,12 @@ function createDraftCoordinator(store) {
       // Both windows can acknowledge one receipt. An already-persisted exact
       // result needs no write and must not become a spurious edit conflict.
       if (JSON.stringify(draft) === JSON.stringify(current.draft))
-        return { ok: true, revision: current.revision, changed: false };
+        return {
+          ok: true,
+          revision: current.revision,
+          changed: false,
+          staleEqual: expectedRevision < current.revision,
+        };
       if (expectedRevision !== current.revision)
         return { ok: false, revision: current.revision };
       store.save(workspaceId, conversationId, draft);
