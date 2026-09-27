@@ -41,13 +41,29 @@ function hasExactKeys(value, keys) {
 
 const isUuid = (value) => typeof value === "string" && UUID_RE.test(value);
 const isText = (value) => typeof value === "string" && value.length <= MAX_TEXT;
+const isProviderId = (value) =>
+  typeof value === "string" && value.trim().length > 0 && value.length <= 128;
+
+function isProviderIntent(value) {
+  return (
+    hasExactKeys(value, ["selection", "bindingRevision"]) &&
+    Number.isSafeInteger(value.bindingRevision) &&
+    value.bindingRevision > 0 &&
+    hasExactKeys(value.selection, ["provider", "accountId", "modelId"]) &&
+    value.selection.provider === "claude" &&
+    isProviderId(value.selection.accountId) &&
+    isProviderId(value.selection.modelId)
+  );
+}
 
 function isDraft(draft) {
   if (!hasExactKeys(draft, ["text", "pending"]) || !isText(draft.text))
     return false;
   if (draft.pending === null) return true;
   return (
-    hasExactKeys(draft.pending, ["requestId", "text"]) &&
+    (hasExactKeys(draft.pending, ["requestId", "text"]) ||
+      (hasExactKeys(draft.pending, ["requestId", "text", "provider"]) &&
+        isProviderIntent(draft.pending.provider))) &&
     isUuid(draft.pending.requestId) &&
     isText(draft.pending.text)
   );
@@ -57,6 +73,14 @@ function copyDraft(draft) {
   const pending = draft.pending && {
     requestId: draft.pending.requestId,
     text: draft.pending.text,
+    ...(draft.pending.provider
+      ? {
+          provider: {
+            selection: { ...draft.pending.provider.selection },
+            bindingRevision: draft.pending.provider.bindingRevision,
+          },
+        }
+      : {}),
   };
   return { text: draft.text, pending };
 }

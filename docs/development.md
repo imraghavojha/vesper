@@ -1,6 +1,6 @@
 # Development
 
-Vesper can open a local workspace on a Mac or connect to an independent host. Android is optional for Mac use. The current application saves main and side conversations, actual user messages, shared appearance and private unsent drafts, alongside workspace identity and device connections. No provider is connected and no assistant replies are invented. Provider replies, voice, notch/hotkey invocation, connectors, schedules and Android are still being built. IMR-6 remains open for its remaining acceptance.
+Vesper can open a local workspace on a Mac or connect to an independent host. Android is optional for Mac use. The application saves main and side conversations, shared appearance and private unsent drafts, alongside workspace identity and device connections. An explicitly selected eligible Claude account can provide chat replies. Voice, notch/hotkey invocation, connectors, schedules, other harnesses and Android are still being built. IMR-6 remains open for its remaining acceptance.
 
 ## Run the Mac app
 
@@ -92,4 +92,16 @@ For a consistent backup, stop the host and copy its entire data directory, inclu
 
 Run `npm run check` for repository metadata, typechecking, lint, desktop syntax and production builds. CI repeats these checks. They do not prove behavior. Temporary verification outside the repository checks actual HTTP/SQLite outcomes, old-database compatibility, private utility-process bootstrap, real process shutdown/crashes, occupied-port recovery, bounded retries and encrypted device storage. The owner's instruction is to keep these harnesses outside the repository and report their outcomes. No retained test suite is added.
 
-The first-run Muse screen is unverified. This temporary setup UI does not claim Muse parity or replace the complete Mac/Android target. Native voice, screen context, notch/hotkey access, provider-backed replies and personal integrations remain required product work. Current conversations store user messages without claiming agent execution. Later UI changes need direct reference inspection, matched screenshots and motion evidence.
+The first-run Muse screen is unverified. This temporary setup UI does not claim Muse parity or replace the complete Mac/Android target. Native voice, screen context, notch/hotkey access and personal integrations remain required product work. Later UI changes need direct reference inspection, matched screenshots and motion evidence.
+
+## Claude chat connection
+
+The first provider slice uses `@anthropic-ai/claude-agent-sdk` 0.3.283 with an existing eligible Claude login on the machine running the host. The executable defaults to `~/.local/bin/claude`; a host operator can override its absolute path with `VESPER_CLAUDE_PATH`. A remote host needs its own eligible login. The packaged Mac app uses the local login without copying tokens into Vesper's database. Other harnesses remain visibly unavailable.
+
+Open the Provider panel and explicitly refresh availability. Select the discovered account/model, then apply it to that conversation. Each new send pins that selection and its revision. A fresh initialization checks account, resolved model, subscription availability and disabled paid overage before releasing the prompt. Missing or incompatible metadata blocks the run. The SDK's experimental subscription-usage control is a pinned compatibility dependency; this personal verification does not settle eligibility for public third-party distribution.
+
+The adapter has chat capability only. It disables built-in tools, MCP, Claude connectors, project settings, memory, hooks and plugins, excludes API/cloud billing overrides and uses a dedicated runtime directory. Before a turn, proof consists of explicit SDK options and verified spawn flags; the actual turn initialization must also report empty tools and MCP before text is accepted. No action or browser broker is implemented by this slice.
+
+Runs have durable queued, initializing, running, cancelling and terminal states. Stop waits for an SDK/process completion receipt; an unknown cleanup outcome is not represented as a confirmed cancellation. The host limits concurrent replies to two, caps each output and run duration, and never starts idle inference. Restart marks unfinished runs interrupted rather than resubmitting them. Repeating the same request reads its original receipt; changing its payload is a conflict. Stream text is persisted in short batches and shared through the existing authenticated change cursor.
+
+Native session resume is deliberately unavailable. Each turn receives up to the latest 20 visible conversation messages within 60,000 characters, including the status of partial earlier replies. The same bounded history supports explicit provider changes later; it does not promise hidden provider reasoning or unlimited context continuity. Drafts pin their intended provider only when the user presses Send. Existing pending save-only messages stay save-only after upgrade. Reconnect only reads state and receipts.

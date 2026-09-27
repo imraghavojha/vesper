@@ -6,6 +6,9 @@ import { fileURLToPath } from "node:url";
 import { appRouter } from "./router.js";
 import { openStore } from "./store.js";
 import { attachSync } from "./sync.js";
+import { createProviderRuntime } from "./provider-runtime.js";
+import { createClaudeAdapter } from "./providers/claude.js";
+import { homedir } from "node:os";
 
 type ManagedPort = {
   postMessage(value: unknown): void;
@@ -22,6 +25,20 @@ const address = managed
 const store = openStore(
   resolve(process.env.VESPER_DATA_DIR ?? ".vesper"),
   managed ? process.env.VESPER_EXPECTED_WORKSPACE_ID : undefined,
+);
+const providers = createProviderRuntime(
+  store,
+  createClaudeAdapter({
+    executablePath:
+      process.env.VESPER_CLAUDE_PATH ?? resolve(homedir(), ".local/bin/claude"),
+    runtimeDirectory: resolve(
+      process.env.VESPER_DATA_DIR ?? ".vesper",
+      "provider-runtime",
+      "claude",
+    ),
+    maxOutputTokens: 2048,
+    timeoutMs: 120000,
+  }),
 );
 const allowedOrigins = new Set(
   (
@@ -40,6 +57,7 @@ const handler = createHTTPHandler({
     const auth = req.headers.authorization;
     return {
       store,
+      providers,
       device: store.authenticate(
         auth?.startsWith("Bearer ") ? auth.slice(7) : undefined,
       ),
@@ -199,11 +217,16 @@ if (managed)
       });
     }
   });
+let shuttingDown = false;
 function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
   sync.close();
   server.close(() => {
-    store.close();
-    process.exit(0);
+    void providers.close().finally(() => {
+      store.close();
+      process.exit(0);
+    });
   });
   server.closeIdleConnections();
 }

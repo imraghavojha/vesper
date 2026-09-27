@@ -27,7 +27,16 @@ export function useSync(
             url: connection.url + "/trpc",
             headers: () => ({ Authorization: `Bearer ${connection.token}` }),
             fetch: (url, options) =>
-              fetch(url, { ...options, signal: AbortSignal.timeout(8000) }),
+              fetch(url, {
+                ...options,
+                signal: AbortSignal.timeout(
+                  /\/(providerAvailability|bindProvider|cancelProviderRun)(?:\?|$)/.test(
+                    String(url),
+                  )
+                    ? 60000
+                    : 8000,
+                ),
+              }),
           }),
         ],
       }),

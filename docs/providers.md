@@ -4,17 +4,19 @@ The product goal is an open Muse equivalent that can use the person's preferred 
 
 ## Launch provider targets
 
-| Harness | Integration | Authentication | Evidence and gate |
-| --- | --- | --- | --- |
-| Codex | App Server for persistent interactive turns; exec for bounded jobs | User-managed supported Codex login or API configuration | Official App Server/noninteractive docs and T3 adapter. Verify account eligibility locally without copying tokens. |
-| Claude | Agent SDK around installed Claude binary, with streamed sessions and approval callbacks | User-owned supported Claude login or API path; verify distribution eligibility | T3 uses the Agent SDK. Current Help Center confirms plan usage continues; SDK product-login policy still needs distribution review. |
-| OpenCode | Supported HTTP server/events and native sessions | User-configured OpenCode providers | Discover model list; preserve native provider permissions and usage errors. |
-| Antigravity | Official ACP agent | Its own supported Google login or supported API mode | T3 integration and ACP registry verified; installed access not tested. |
-| Custom API/local model | Explicit endpoint adapter with Vesper-owned tool loop | User-supplied API credential or local endpoint | Must declare structured tool, vision, streaming and context capabilities. A chatbot subscription alone is not an API credential. |
+| Harness                | Integration                                                                             | Authentication                                                                 | Evidence and gate                                                                                                                   |
+| ---------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Codex                  | App Server for persistent interactive turns; exec for bounded jobs                      | User-managed supported Codex login or API configuration                        | Official App Server/noninteractive docs and T3 adapter. Verify account eligibility locally without copying tokens.                  |
+| Claude                 | Agent SDK around installed Claude binary, with streamed sessions and approval callbacks | User-owned supported Claude login or API path; verify distribution eligibility | T3 uses the Agent SDK. Current Help Center confirms plan usage continues; SDK product-login policy still needs distribution review. |
+| OpenCode               | Supported HTTP server/events and native sessions                                        | User-configured OpenCode providers                                             | Discover model list; preserve native provider permissions and usage errors.                                                         |
+| Antigravity            | Official ACP agent                                                                      | Its own supported Google login or supported API mode                           | T3 integration and ACP registry verified; installed access not tested.                                                              |
+| Custom API/local model | Explicit endpoint adapter with Vesper-owned tool loop                                   | User-supplied API credential or local endpoint                                 | Must declare structured tool, vision, streaming and context capabilities. A chatbot subscription alone is not an API credential.    |
 
 Extensibility should permit additional adapters, including T3's other harness types, without coupling chat or browser code to a vendor. Do not promise every subscription can be reused if the vendor does not expose an authorized integration.
 
 ## Claude findings
+
+The IMR-10 implementation provides one chat-only adapter using SDK 0.3.283 and the host's installed Claude executable. It requires fresh account/model and subscription-overage checks, disables tools and MCP, and exposes actual streaming, cancellation and durable run receipts. It does not implement action approvals, browser access or native session resume. Other harness rows describe required future capabilities, not installed adapters. See [development](development.md#claude-chat-connection) for runtime restrictions and bounded visible-history continuity.
 
 The statement that Claude cannot be called through commands is incorrect for the current CLI. Its [programmatic guide](https://code.claude.com/docs/en/headless) documents `claude -p`, JSON and stream-JSON output, resuming, and interruption. `--bare` avoids automatic context discovery but currently skips subscription OAuth/keychain login, so it is not a free context-reduction switch for a subscription adapter.
 

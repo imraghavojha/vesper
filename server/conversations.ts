@@ -2,6 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { createHash, randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { transaction } from "./transaction.js";
+import { createProviderState } from "./provider-state.js";
 import type {
   Appearance,
   Conversation,
@@ -74,6 +75,17 @@ export function createConversations(
       hasMore: rows.length > 100,
     };
   }
+  function appendChange(kind: Change["kind"], id: string, revision: number) {
+    const entry = database
+      .prepare(
+        "INSERT INTO changes(kind,entityId,revision) VALUES (?,?,?) RETURNING cursor",
+      )
+      .get(kind, id, revision) as { cursor: number };
+    database
+      .prepare("DELETE FROM changes WHERE cursor <= ?")
+      .run(entry.cursor - retention);
+    return entry.cursor;
+  }
   function mutate(
     deviceId: string,
     requestId: string,
@@ -86,6 +98,16 @@ export function createConversations(
       .digest("hex");
     let changed = false;
     const result = transaction(database, () => {
+      if (
+        !database
+          .prepare("SELECT id FROM devices WHERE id=? AND revokedAt IS NULL")
+          .get(deviceId)
+      ) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "This device no longer has access.",
+        });
+      }
       const prior = database
         .prepare("SELECT * FROM mutation_receipts WHERE requestId=?")
         .get(requestId) as
@@ -110,14 +132,9 @@ export function createConversations(
         return JSON.parse(prior.resultJson) as MutationResult;
       }
       const change = write();
-      const entry = database
-        .prepare(
-          "INSERT INTO changes(kind,entityId,revision) VALUES (?,?,?) RETURNING cursor",
-        )
-        .get(change.kind, change.id, change.revision) as { cursor: number };
       const receipt = {
         id: change.id,
-        cursor: entry.cursor,
+        cursor: appendChange(change.kind, change.id, change.revision),
         revision: change.revision,
       };
       database
@@ -129,16 +146,20 @@ export function createConversations(
           payloadHash,
           JSON.stringify(receipt),
         );
-      database
-        .prepare("DELETE FROM changes WHERE cursor <= ?")
-        .run(entry.cursor - retention);
       changed = true;
       return receipt;
     });
     if (changed) notify();
     return result;
   }
+  const providerState = createProviderState(
+    database,
+    mutate,
+    appendChange,
+    notify,
+  );
   return {
+    ...providerState,
     changeCursor: cursor,
     sharedSettings: settings,
     syncSnapshot(conversationId?: string) {
@@ -154,6 +175,10 @@ export function createConversations(
           conversations,
           settings: settings(),
           conversationId: selected,
+          providerBinding: providerState.providerBinding(selected),
+          providerBindingRevision:
+            providerState.providerBindingRevision(selected),
+          providerRun: providerState.latestProviderRun(selected),
           ...messagePage(selected),
         };
       });

@@ -1,0 +1,137 @@
+.provider-panel {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 1px solid var(--chat-line);
+  font-size: 13px;
+  line-height: 1.35;
+  color: inherit;
+  min-width: 0;
+}
+
+.provider-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.provider-panel__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.provider-panel__status,
+.provider-panel__group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.provider-panel__line {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.provider-panel__name {
+  font-weight: 600;
+}
+
+.provider-panel__muted,
+.provider-panel__capabilities,
+.provider-panel__others {
+  color: var(--chat-muted);
+  font-size: 12px;
+}
+
+.provider-panel__capabilities,
+.provider-panel__others {
+  margin: 0;
+  padding: 0 0 0 14px;
+}
+
+.provider-panel__label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.provider-panel__select {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: 12px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--chat-line);
+  border-radius: 4px;
+}
+
+.provider-panel__button {
+  align-self: flex-start;
+  padding: 3px 8px;
+  font: inherit;
+  font-size: 12px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--chat-line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.provider-panel__button--primary {
+  font-weight: 600;
+}
+
+.provider-panel__button:disabled,
+.provider-panel__select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.provider-panel__button:focus-visible,
+.provider-panel__select:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+
+.provider-panel__notice,
+.provider-panel__error {
+  margin: 0;
+  padding: 4px 6px;
+  font-size: 12px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+
+.provider-panel__error {
+  font-weight: 600;
+}
+
+.provider-panel__usage {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.provider-panel__usage-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.provider-panel__usage dt {
+  color: var(--chat-muted);
+}
+
+.provider-panel__usage dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
