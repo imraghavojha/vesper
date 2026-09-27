@@ -332,25 +332,29 @@ export function ConversationScreen({
   // path commits, move focus back to it (or a visible fallback launcher).
   const panelOpener = useRef<HTMLElement | null>(null);
   const restorePanelFocus = useRef(false);
+  // An explicit open/close applies to both layouts, so resizing across the
+  // docked/overlay boundary never reverses the user's last choice. Until the
+  // user chooses, the defaults stand: docked shown, overlay hidden.
+  const focusPanelOnOpen = useRef(false);
   function openPanel(tab: PanelTab) {
     setPanelTab(tab);
-    if (docked) setPanelHidden(false);
-    else {
-      const active = document.activeElement;
-      panelOpener.current = active instanceof HTMLElement ? active : null;
-      setProviderOpen(true);
-    }
+    const active = document.activeElement;
+    panelOpener.current = active instanceof HTMLElement ? active : null;
+    restorePanelFocus.current = false;
+    focusPanelOnOpen.current = !docked;
+    setPanelHidden(false);
+    setProviderOpen(true);
   }
   function closeOverlayPanel() {
     restorePanelFocus.current = true;
+    setPanelHidden(true);
     setProviderOpen(false);
   }
   function closePanel() {
-    if (docked) setPanelHidden(true);
-    else closeOverlayPanel();
+    closeOverlayPanel();
   }
   useEffect(() => {
-    if (providerOpen || !restorePanelFocus.current) return;
+    if (panelVisible || !restorePanelFocus.current) return;
     restorePanelFocus.current = false;
     const opener = panelOpener.current;
     panelOpener.current = null;
@@ -367,7 +371,7 @@ export function ConversationScreen({
       ),
     ].find(usable);
     target?.focus();
-  }, [providerOpen]);
+  }, [panelVisible]);
   function openSettings(section: SettingsSection) {
     if (settingsWindow) {
       chooseSection(section);
@@ -380,18 +384,30 @@ export function ConversationScreen({
     };
     const bridge = window.vesperDesktop;
     if (bridge?.showSettings)
-      // Only the four validated entry sections cross the bridge.
+      // Only the four validated entry sections cross the bridge. A native
+      // rejection may mean quick chat or voice capture did not confirm it
+      // stopped, so never cover it with the DOM dialog; report it instead.
       void bridge
         .showSettings(entrySection(section) ?? "general")
-        .catch(openDialog);
+        .catch(() =>
+          setError(
+            "Settings couldn’t open. Check the voice controls in case a recording is still active, then try again.",
+          ),
+        );
     else openDialog();
   }
   useEffect(() => {
     if (docked || !providerOpen) return;
-    panelClose.current?.focus();
+    // Only an explicit open moves focus; a resize that turns an already open
+    // docked panel into an overlay leaves focus where it is.
+    if (focusPanelOnOpen.current) {
+      focusPanelOnOpen.current = false;
+      panelClose.current?.focus();
+    }
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !settingsDialog.current?.open) {
         restorePanelFocus.current = true;
+        setPanelHidden(true);
         setProviderOpen(false);
       }
     };
@@ -1842,11 +1858,15 @@ function ConversationBody({
                       ))}
                   </div>
                   {message.role === "assistant" &&
-                    (status === "failed" || status === "interrupted") && (
+                    (status === "failed" ||
+                      status === "interrupted" ||
+                      status === "cancelled") && (
                       <small className="message-status" aria-hidden="true">
                         {status === "failed"
                           ? "Reply failed"
-                          : "Reply interrupted"}
+                          : status === "interrupted"
+                            ? "Reply interrupted"
+                            : "Reply stopped"}
                       </small>
                     )}
                 </article>

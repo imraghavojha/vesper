@@ -265,6 +265,20 @@ export function Dictation({
           Add transcript to draft
         </button>
       )}
+      {phase === "idle" && text && (
+        <button
+          type="button"
+          onClick={() => {
+            // Only a retained, finished transcript: never an active or newer
+            // capture, and the conversation draft is left untouched.
+            if (current.current) return;
+            setText("");
+            setError("");
+          }}
+        >
+          Discard transcript
+        </button>
+      )}
       {error && (
         <p className="dictation-error" role="alert">
           {error}

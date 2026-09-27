@@ -632,8 +632,11 @@ async function showSettings(section) {
   if (!settingsSections.has(section))
     throw new Error("Unknown Settings section.");
   currentSettingsSection = section;
+  // Dismiss the floating window through its normal capture-stop path before
+  // showing Settings, so an always-on-top Quick Chat cannot cover its controls.
+  await quickChat.hide();
   if (!settingsWindow || settingsWindow.isDestroyed()) {
-    const created = createWindow("settings", section);
+    const created = createWindow("settings", currentSettingsSection);
     const contents = created.webContents;
     settingsWindow = created;
     settingsReady = new Promise((resolve, reject) => {
