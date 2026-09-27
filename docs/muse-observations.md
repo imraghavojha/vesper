@@ -35,37 +35,35 @@ Screenshots were captured inline during inspection, not dumped into a repository
 | Dictation | Microphone/accessibility, input device, automatic send, audio cues, push-to-talk and hands-free shortcuts. |
 | Secure Store | Domain list and separate masked credential entry form. No saved password was opened or copied. |
 | Permissions | Connector/web defaults, persistent grants, connector/app/file/site/artifact/task/network categories, reset. |
-| Messaging | Connected WhatsApp channel. |
-| Devices | Current Mac and a Nothing Phone shown active. |
+| Messaging | Channel management includes WhatsApp. |
+| Devices | Current and other devices with activity status. |
 | Data controls | Training consent, memory import, agent-data download, destructive reset. |
 | Wallet | Link by Stripe add control and disabled Shop Pay coming-soon row. No payment setup performed. |
 
-## Initial main-thread case study
+## Synthetic acceptance journey
 
-The native accessibility tree exposed the main conversation from onboarding through the latest updates. Several long offscreen messages were truncated, so this is not a full verbatim export. Passwords appeared in historical chat; they were not retained in project documents, test fixtures, or external tickets. Treat the original conversation as private and use synthetic examples.
+The following is fictional test data, not the user's account history. It preserves the product behaviors that future agents need to demonstrate.
 
-1. Muse named the assistant, then connected two Gmail accounts, Google Calendar, Contacts, and Tasks. Microsoft mail OAuth was denied.
-2. Canvas began with a calendar feed. The conversation then added a personal access token through a secure form and corrected the institution base URL. Muse reported API access to courses, assignments, submissions, grades, announcements, modules, and files.
-3. SubItUp discovery used a link in a Canvas course. Initial SSO attempts confused full email with short institutional username. Employee account selection and the short username mattered. Muse later reported a successful shift read.
-4. The user changed daily reconciliation to a month-end comparison of the whole next month. Existing calendar sync should remain the primary source, with reconciliation correcting gaps.
-5. Muse repeatedly tested login/MFA until the user told it to stop and reuse the saved session. Automatic Duo approval was discussed but not convincingly proven. The final fallback was notification when manual input is needed.
-6. Outlook used a separate secure capture for Microsoft's login origin. Muse reported a successful inbox summary, but a later activity entry says inbox reading was blocked. Browser login is not universally reliable.
-7. Side chats cover an alarm, alarm volume, and reminders/calendar events. Activity distinguishes a reportedly scheduled alarm from a failed volume change.
-8. Muse sent unrequested tips and personal suggestions afterward. Vesper explicitly omits this behavior.
+1. Alex connects two example mailboxes and calendars. The UI labels each account and keeps writes scoped to the selected destination.
+2. Alex adds a Canvas token for a fictional institution through the secure form. Vesper reports actual accessible capabilities and explains that a calendar feed contains less information than the course API.
+3. Alex opens an employee scheduling site through its institution-specific SSO route. The flow may require an Employee choice and a short username instead of a full email address. A failed attempt pauses clearly rather than repeatedly retrying.
+4. Alex requests a last-day-of-month check of the next month's shifts against a selected calendar. Existing calendar sync remains intact; the comparison proposes only missing or changed events.
+5. Reauthentication pauses for user input when needed. A valid browser session is reused instead of deliberately logging out to test MFA.
+6. An example school mailbox rejects API consent. A permitted browser session may be used, but a later expired session is shown as blocked rather than claimed successful.
+7. Alex requests an Android alarm and an audio adjustment. The UI distinguishes a confirmed result, a dispatched request and an unsupported or failed action.
+8. No unsolicited tips or unrequested monitoring follows. Only explicit schedules may start more work.
 
-## Inconsistencies to turn into tests
+## Regression scenarios
 
-The SubItUp goal description still says every morning. Its later timeline says monthly last-day. Upcoming and the goal summary show September 28 as next run. The associated filename encodes days 28,29,30,31. That visible mismatch is sufficient to require a calendar-aware month-end test; it does not prove how Muse's internal scheduler actually executes.
+A last-day intention must not become all dates 28 through 31. Goal descriptions, chat confirmations and Upcoming must derive from the same schedule. Test February, leap years and daylight saving changes. A stale daily title must not survive a change to monthly recurrence.
 
-Never copy the stale daily title/description into Vesper. Derive display text and next execution from a canonical schedule. Preserve a factual outcome log rather than asserting automatic MFA worked because a timeline entry says so.
+MFA success must be demonstrated by an actual result, not inferred from an assistant's claim. A prior successful login must not imply that a session is still valid today.
 
-## Connector catalog observed
+## Connector catalog
 
-Connected: Browser, Canvas Custom, Gmail, Google Calendar, Google Contacts, Google Tasks.
+Observed catalog names, without retaining personal connection state: Browser, Canvas Custom, Gmail, Google Calendar, Google Contacts, Google Tasks, Apple Calendar, Apple Contacts, Apple Reminders, Calendly, Facebook, Finances via Plaid, Function Health, Google Docs, Drive, Forms, Sheets, Slides, Granola, HealthEx, Instagram, Instagram Messages, Messenger, Notion, OpenTable, Outlook Calendar, Outlook Contacts, Outlook Mail, Peloton, Philips Hue, Printify, Spotify, Tailscale, Tessie, Threads, Threads messages, Withings.
 
-Available rows: Apple Calendar, Apple Contacts, Apple Reminders, Calendly, Facebook, Finances via Plaid, Function Health, Google Docs, Drive, Forms, Sheets, Slides, Granola, HealthEx, Instagram, Instagram Messages, Messenger, Notion, OpenTable, Outlook Calendar, Outlook Contacts, Outlook Mail, Peloton, Philips Hue, Printify, Spotify, Tailscale, Tessie, Threads, Threads messages, Withings.
-
-These are Muse catalog entries, not verified reusable integrations. Prioritize the integrations in the product specification. Do not imply Vesper can obtain private partner access merely by copying the list.
+These are reference catalog names, not verified Vesper integrations. Prioritize the product specification and verify real API access. A catalog name does not establish access to a private partner API.
 
 ## Remaining evidence
 
