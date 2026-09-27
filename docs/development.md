@@ -1,6 +1,6 @@
 # Development
 
-Vesper can open a local workspace on a Mac or connect to an independent host. Android is optional for Mac use. The application saves main and side conversations, shared appearance and private unsent drafts, alongside workspace identity and device connections. An explicitly selected eligible Claude account can provide chat replies. Voice, notch/hotkey invocation, connectors, schedules, other harnesses and Android are still being built. IMR-6 remains open for its remaining acceptance.
+Vesper can open a local workspace on a Mac or connect to an independent host. Android is optional for Mac use. The application saves main and side conversations, shared appearance and private unsent drafts, alongside workspace identity and device connections. An explicitly selected eligible Claude account can provide chat replies. Mac quick access and on-device voice draft controls are available as described below; connectors, schedules, other harnesses and Android are still being built. IMR-6 remains open for its remaining acceptance.
 
 ## Run the Mac app
 
@@ -11,6 +11,7 @@ nvm install
 nvm use
 npm ci
 npm run build
+npm run build:native
 npm run desktop
 ```
 
@@ -105,3 +106,13 @@ The adapter has chat capability only. It disables built-in tools, MCP, Claude co
 Runs have durable queued, initializing, running, cancelling and terminal states. Stop waits for an SDK/process completion receipt; an unknown cleanup outcome is not represented as a confirmed cancellation. The host limits concurrent replies to two, caps each output and run duration, and never starts idle inference. Restart marks unfinished runs interrupted rather than resubmitting them. Repeating the same request reads its original receipt; changing its payload is a conflict. Stream text is persisted in short batches and shared through the existing authenticated change cursor.
 
 Native session resume is deliberately unavailable. Each turn receives up to the latest 20 visible conversation messages within 60,000 characters, including the status of partial earlier replies. The same bounded history supports explicit provider changes later; it does not promise hidden provider reasoning or unlimited context continuity. Drafts pin their intended provider only when the user presses Send. Existing pending save-only messages stay save-only after upgrade. Reconnect only reads state and receipts.
+
+## Mac quick chat and voice drafts
+
+The app owns one reusable quick window near the top of the active display, plus a menu-bar entry. Its requested default shortcut is `Alt+Space`, matching the recorded Muse setting. If another app owns that shortcut, Vesper shows the conflict and keeps manual/menu-bar access. It never quits Muse or silently substitutes another shortcut. Set an alternative explicitly in the full window's Quick chat controls. Requested and active shortcuts are distinct; a failed replacement keeps the old working registration. Escape or Dismiss hides the quick window; quitting removes Vesper's registration and tray.
+
+Quick and full windows use the same active conversation, authenticated host and actual provider run. Unsent drafts remain local and encrypted. The main process checks draft revisions before writing and notifies the other window after persistence. A stale writer keeps its text unsaved and cannot overwrite the other window through queued retries. Explicit Retry saving chooses the retained local text. Neither opening quick chat nor reconnecting sends a message or starts inference.
+
+Voice input uses a small Swift helper compiled by `npm run build:native` with the installed macOS SDK, bundled outside asar in `Resources/native`. The speech engine requires macOS 26. Check voice queries supported locale/assets without capturing audio. Prepare on-device voice explicitly requests Apple's language assets when missing. Record voice requests microphone access and starts one bounded session; Stop finalizes its transcript into the current draft, while Cancel/dismissal/quit releases capture without inserting provisional text. The session is limited to two minutes. Audio stays in memory and is never given to a provider; submitting the draft is a separate action. Native helper commands and responses are bounded and checked by trusted main-process code. Chromium microphone/camera permissions remain denied.
+
+Public signing/notarization and actual packaged microphone authorization are separate release checks. Test on-device file recognition with a temporary ordinary synthetic voice fixture, then delete it; this verifies the transcription engine, not live microphone capture. A present user must deliberately test a harmless spoken phrase to verify recording and permission identity. No unattended room audio should be captured to manufacture a pass. The compact window's dimensions and placement are explicit Vesper defaults pending direct Muse notch/motion measurements.

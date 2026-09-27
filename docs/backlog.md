@@ -62,7 +62,7 @@ Choose OpenCode or Antigravity, select available accounts/models, and use the sa
 
 [IMR-14](https://linear.app/imraghavojha/issue/2ea97df0-575d-4df9-9af5-9bff585661e9) · Area: ui. Prerequisites: [IMR-5](https://linear.app/imraghavojha/issue/54e9dd94-32af-41b0-ae86-b77961394faa), [IMR-6](https://linear.app/imraghavojha/issue/985f227d-b01a-462c-b544-2fff3d773368), [IMR-7](https://linear.app/imraghavojha/issue/24bb5e81-16e1-4e90-9126-46d9eff5791e).
 
-Match Muse's rail, chat sidebar, main conversation, composer, unread indicators and side-by-side chat. Support real streamed replies, attachments, dictation, message replies, copy, reactions, cancel/retry and named side chats. Search finds relevant conversations and items. History and unread state remain consistent across devices.
+Match Muse's rail, chat sidebar, main conversation, composer, unread indicators and side-by-side chat. Support real streamed replies, attachments, dictation, message replies, copy, reactions, cancel/retry and named side chats. Search finds relevant conversations and items. History and unread state remain consistent across devices. Mac-only users can invoke a compact quick chat near the notch or top of the display with a global shortcut or menu-bar action, speak with explicit recording controls, and receive text replies using the same conversation and provider. Full and quick windows preserve drafts and active runs. Shortcut conflicts are visible and never change another app’s settings. Voice input stays an unsent draft until explicitly submitted.
 
 ## V11 Inspect activity, approvals, upcoming work and identity
 

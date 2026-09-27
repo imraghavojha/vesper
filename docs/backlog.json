@@ -108,7 +108,7 @@
       "V03"
     ],
     "area": "ui",
-    "acceptance": "Match Muse's rail, chat sidebar, main conversation, composer, unread indicators and side-by-side chat. Support real streamed replies, attachments, dictation, message replies, copy, reactions, cancel/retry and named side chats. Search finds relevant conversations and items. History and unread state remain consistent across devices.",
+    "acceptance": "Match Muse's rail, chat sidebar, main conversation, composer, unread indicators and side-by-side chat. Support real streamed replies, attachments, dictation, message replies, copy, reactions, cancel/retry and named side chats. Search finds relevant conversations and items. History and unread state remain consistent across devices. Mac-only users can invoke a compact quick chat near the notch or top of the display with a global shortcut or menu-bar action, speak with explicit recording controls, and receive text replies using the same conversation and provider. Full and quick windows preserve drafts and active runs. Shortcut conflicts are visible and never change another app’s settings. Voice input stays an unsent draft until explicitly submitted.",
     "linearId": "IMR-14",
     "linearUrl": "https://linear.app/imraghavojha/issue/2ea97df0-575d-4df9-9af5-9bff585661e9"
   },

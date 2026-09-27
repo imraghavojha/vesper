@@ -8,6 +8,8 @@ Also read [architecture and concrete reuse](docs/architecture-and-reuse.md). The
 
 ## Current state
 
+- IMR-14 adds a Mac quick-chat window using the same conversations, provider runs and encrypted drafts as the full window. Shortcut conflicts are visible and do not alter other apps. Explicit voice controls use a bundled Apple on-device speech helper; voice produces an unsent draft. Actual microphone permission/capture still requires a present-user verification; synthetic file transcription is separate evidence. The complete reference layout, motion, attachments/search/reactions and Android remain open.
+
 - IMR-10 adds the first connected provider: Claude chat through its maintained Agent SDK, pinned to the discovered account and selected model. Messages and run receipts persist together; interrupted runs never restart automatically. Tools, MCP, inherited project instructions and external connectors are disabled. This is a chat-only slice, not completion of the broader provider or Claude action contracts.
 
 - IMR-7 adds durable main/side conversations and user messages, shared appearance, workspace-global idempotent receipts, revision conflicts, authenticated change notifications with cursor/snapshot recovery, and private Mac/browser drafts. Drafts never send automatically. The remaining goal/approval domains and Android acceptance stay open.
