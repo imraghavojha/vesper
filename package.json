@@ -17,7 +17,7 @@
     "check": "node scripts/check-repository.mjs && npm run typecheck && npm run lint && npm run check:desktop && npm run build",
     "pairing-code": "tsx server/pairing.ts",
     "format": "prettier --write server shared web desktop",
-    "check:desktop": "node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/local-host.cjs && node --check scripts/package-desktop.mjs",
+    "check:desktop": "node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/local-host.cjs && node --check scripts/package-desktop.mjs && node --check desktop/drafts.cjs",
     "package:mac": "npm run build && node scripts/package-desktop.mjs"
   },
   "dependencies": {
@@ -26,7 +26,8 @@
     "@trpc/server": "11.19.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "zod": "4.6.5"
+    "zod": "4.6.5",
+    "ws": "8.22.0"
   },
   "devDependencies": {
     "@types/node": "24.19.0",
@@ -39,6 +40,7 @@
     "typescript": "6.0.3",
     "typescript-eslint": "8.70.1",
     "vite": "8.3.1",
-    "@electron/packager": "20.3.0"
+    "@electron/packager": "20.3.0",
+    "@types/ws": "8.18.1"
   }
 }

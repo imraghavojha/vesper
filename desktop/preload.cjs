@@ -8,6 +8,15 @@ function subscribe(channel, callback) {
 contextBridge.exposeInMainWorld(
   "vesperDesktop",
   Object.freeze({
+    loadDraft: (workspaceId, conversationId) =>
+      ipcRenderer.invoke("vesper:drafts:load", workspaceId, conversationId),
+    saveDraft: (workspaceId, conversationId, draft) =>
+      ipcRenderer.invoke(
+        "vesper:drafts:save",
+        workspaceId,
+        conversationId,
+        draft,
+      ),
     loadConnection: () => ipcRenderer.invoke("vesper:connection:load"),
     saveConnection: (value) =>
       ipcRenderer.invoke("vesper:connection:save", value),

@@ -473,88 +473,170 @@ code {
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-appearance="light"]) {
     color: #e8e8e8;
     background: #191919;
     color-scheme: dark;
   }
-  header,
-  footer,
-  .scope-note {
+  :root:not([data-appearance="light"]) header,
+  :root:not([data-appearance="light"]) footer,
+  :root:not([data-appearance="light"]) .scope-note {
     border-color: #353535;
   }
-  .card {
+  :root:not([data-appearance="light"]) .card {
     background: #222222;
     border-color: #383838;
     box-shadow: none;
   }
-  button,
-  input {
+  :root:not([data-appearance="light"]) button,
+  :root:not([data-appearance="light"]) input {
     background: #303030;
     border-color: #454545;
     color: #e8e8e8;
   }
-  button:hover {
+  :root:not([data-appearance="light"]) button:hover {
     background: #3a3a3a;
   }
-  .primary,
-  .mark {
+  :root:not([data-appearance="light"]) .primary,
+  :root:not([data-appearance="light"]) .mark {
     background: #e5e5e5;
     color: #222;
   }
-  .primary:hover {
+  :root:not([data-appearance="light"]) .primary:hover {
     background: #fff;
   }
-  .muted,
-  .lead,
-  .host-note p,
-  .field-help,
-  .header-note,
-  .eyebrow,
-  .scope-note,
-  footer,
-  dt,
-  details,
-  .small-note,
-  .device-list p {
+  :root:not([data-appearance="light"]) .muted,
+  :root:not([data-appearance="light"]) .lead,
+  :root:not([data-appearance="light"]) .host-note p,
+  :root:not([data-appearance="light"]) .field-help,
+  :root:not([data-appearance="light"]) .header-note,
+  :root:not([data-appearance="light"]) .eyebrow,
+  :root:not([data-appearance="light"]) .scope-note,
+  :root:not([data-appearance="light"]) footer,
+  :root:not([data-appearance="light"]) dt,
+  :root:not([data-appearance="light"]) details,
+  :root:not([data-appearance="light"]) .small-note,
+  :root:not([data-appearance="light"]) .device-list p {
     color: #a4a4a4;
   }
-  .text-button {
+  :root:not([data-appearance="light"]) .text-button {
     background: transparent;
     color: #c3c3c3;
   }
-  .pill {
+  :root:not([data-appearance="light"]) .pill {
     background: #343434;
     color: #ccc;
   }
-  .device-list li,
-  .small-note {
+  :root:not([data-appearance="light"]) .device-list li,
+  :root:not([data-appearance="light"]) .small-note {
     border-color: #3b3b3b;
   }
-  .status {
+  :root:not([data-appearance="light"]) .status {
     background: #29362a;
     color: #b0c5a7;
     border-color: #47563e;
   }
-  .status.offline,
-  .notice {
+  :root:not([data-appearance="light"]) .status.offline,
+  :root:not([data-appearance="light"]) .notice {
     background: #383023;
     color: #e8cda9;
     border-color: #5b4933;
   }
-  .pair-code {
+  :root:not([data-appearance="light"]) .pair-code {
     background: #2b3428;
     color: #dce8d2;
     border-color: #49583f;
   }
-  .pair-code p {
+  :root:not([data-appearance="light"]) .pair-code p {
     color: #b1c3a1;
   }
-  .error {
+  :root:not([data-appearance="light"]) .error {
     background: #3d2929;
     border-color: #69413d;
     color: #edb7ac;
   }
+}
+:root[data-appearance="dark"] {
+  color: #e8e8e8;
+  background: #191919;
+  color-scheme: dark;
+}
+:root[data-appearance="dark"] header,
+:root[data-appearance="dark"] footer,
+:root[data-appearance="dark"] .scope-note {
+  border-color: #353535;
+}
+:root[data-appearance="dark"] .card {
+  background: #222222;
+  border-color: #383838;
+  box-shadow: none;
+}
+:root[data-appearance="dark"] button,
+:root[data-appearance="dark"] input {
+  background: #303030;
+  border-color: #454545;
+  color: #e8e8e8;
+}
+:root[data-appearance="dark"] button:hover {
+  background: #3a3a3a;
+}
+:root[data-appearance="dark"] .primary,
+:root[data-appearance="dark"] .mark {
+  background: #e5e5e5;
+  color: #222;
+}
+:root[data-appearance="dark"] .primary:hover {
+  background: #fff;
+}
+:root[data-appearance="dark"] .muted,
+:root[data-appearance="dark"] .lead,
+:root[data-appearance="dark"] .host-note p,
+:root[data-appearance="dark"] .field-help,
+:root[data-appearance="dark"] .header-note,
+:root[data-appearance="dark"] .eyebrow,
+:root[data-appearance="dark"] .scope-note,
+:root[data-appearance="dark"] footer,
+:root[data-appearance="dark"] dt,
+:root[data-appearance="dark"] details,
+:root[data-appearance="dark"] .small-note,
+:root[data-appearance="dark"] .device-list p {
+  color: #a4a4a4;
+}
+:root[data-appearance="dark"] .text-button {
+  background: transparent;
+  color: #c3c3c3;
+}
+:root[data-appearance="dark"] .pill {
+  background: #343434;
+  color: #ccc;
+}
+:root[data-appearance="dark"] .device-list li,
+:root[data-appearance="dark"] .small-note {
+  border-color: #3b3b3b;
+}
+:root[data-appearance="dark"] .status {
+  background: #29362a;
+  color: #b0c5a7;
+  border-color: #47563e;
+}
+:root[data-appearance="dark"] .status.offline,
+:root[data-appearance="dark"] .notice {
+  background: #383023;
+  color: #e8cda9;
+  border-color: #5b4933;
+}
+:root[data-appearance="dark"] .pair-code {
+  background: #2b3428;
+  color: #dce8d2;
+  border-color: #49583f;
+}
+:root[data-appearance="dark"] .pair-code p {
+  color: #b1c3a1;
+}
+:root[data-appearance="dark"] .error {
+  background: #3d2929;
+  border-color: #69413d;
+  color: #edb7ac;
 }
 
 .revoke-dialog {

@@ -8,6 +8,8 @@ Also read [architecture and concrete reuse](docs/architecture-and-reuse.md). The
 
 ## Current state
 
+- IMR-7 adds durable main/side conversations and user messages, shared appearance, workspace-global idempotent receipts, revision conflicts, authenticated change notifications with cursor/snapshot recovery, and private Mac/browser drafts. No provider is connected; no assistant responses or automatic draft sends are generated. The remaining goal/approval domains and Android acceptance stay open.
+
 - IMR-6 now includes an optional managed local Mac host and a Mac/browser workspace foundation: authenticated pairing, SQLite identity/device persistence, revocation, optimistic rename conflicts and reconnect status. See [development](docs/development.md). Temporary real HTTP/SQLite verification covered concurrent pairing, authentication, revocation, restart/crash recovery and malformed requests. Android, actual independent-host deployment and scheduled work remain open acceptance.
 - Muse 4.1 Mac UI and website were inspected through computer use. The initial main chat was read through the accessibility tree, with some long offscreen messages truncated. Static screenshots were captured inline; no screenshot folder or private transcripts were created in this repository.
 - T3 Code source was inspected at commit `ab099178a7b7f9728843e90fc95ed90bb61d710d` in a temporary checkout outside Vesper.

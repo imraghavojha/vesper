@@ -5,6 +5,7 @@ import { resolve, extname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { appRouter } from "./router.js";
 import { openStore } from "./store.js";
+import { attachSync } from "./sync.js";
 
 type ManagedPort = {
   postMessage(value: unknown): void;
@@ -33,7 +34,7 @@ const allowedOrigins = new Set(
 const handler = createHTTPHandler({
   router: appRouter,
   basePath: "/trpc/",
-  maxBodySize: 16 * 1024,
+  maxBodySize: 64 * 1024,
   allowBatching: false,
   createContext({ req }) {
     const auth = req.headers.authorization;
@@ -110,7 +111,7 @@ const server = createServer(async (req, res) => {
     }
     res.setHeader(
       "Content-Security-Policy",
-      "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+      "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https: wss: ws://localhost:* ws://127.0.0.1:* http://localhost:* http://127.0.0.1:*; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
     );
     res.setHeader(
       "Content-Type",
@@ -126,6 +127,7 @@ const server = createServer(async (req, res) => {
       );
   }
 });
+const sync = attachSync(server, store, allowedOrigins);
 server.requestTimeout = 15_000;
 server.headersTimeout = 10_000;
 let actualPort = port;
@@ -198,6 +200,7 @@ if (managed)
     }
   });
 function shutdown() {
+  sync.close();
   server.close(() => {
     store.close();
     process.exit(0);

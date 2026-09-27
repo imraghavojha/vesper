@@ -14,6 +14,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { createLocalHost } = require("./local-host.cjs");
+const { createDraftStore } = require("./drafts.cjs");
 
 app.setName("Vesper");
 const dataDirectory = path.resolve(
@@ -45,6 +46,10 @@ const PARTITION = "persist:vesper";
 const connectionPath = path.join(dataDirectory, "connection.encrypted");
 const webRoot = path.resolve(__dirname, "../dist/web");
 const windows = new Set();
+const drafts = createDraftStore({
+  directory: path.join(dataDirectory, "drafts"),
+  safeStorage,
+});
 let storedConnection = null;
 let quitting = false;
 let localConnectionPending = null;
@@ -243,6 +248,26 @@ const localHost = createLocalHost({
   },
 });
 function installBridge() {
+  function draftScope(event, workspaceId, conversationId) {
+    requireTrustedCaller(event);
+    if (
+      !storedConnection ||
+      storedConnection.workspaceId !== workspaceId ||
+      typeof conversationId !== "string"
+    )
+      throw new Error("Draft is outside the active workspace.");
+  }
+  ipcMain.handle("vesper:drafts:load", (event, workspaceId, conversationId) => {
+    draftScope(event, workspaceId, conversationId);
+    return drafts.load(workspaceId, conversationId);
+  });
+  ipcMain.handle(
+    "vesper:drafts:save",
+    (event, workspaceId, conversationId, draft) => {
+      draftScope(event, workspaceId, conversationId);
+      drafts.save(workspaceId, conversationId, draft);
+    },
+  );
   ipcMain.handle("vesper:connection:load", async (event) => {
     requireTrustedCaller(event);
     try {
@@ -448,7 +473,7 @@ app.whenReady().then(() => {
           "Content-Type": type,
           "X-Content-Type-Options": "nosniff",
           "Content-Security-Policy":
-            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https: http://127.0.0.1:* http://localhost:*; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
         },
       });
     } catch {

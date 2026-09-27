@@ -1,5 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { transaction } from "./transaction.js";
+import { createConversations } from "./conversations.js";
+import { EventEmitter } from "node:events";
 import { randomBytes, createHash, randomUUID } from "node:crypto";
 import {
   mkdirSync,
@@ -70,7 +72,7 @@ export function openStore(directory: string, expectedWorkspaceId?: string) {
   const schema = db.prepare("SELECT version FROM schema_version").get() as {
     version: number;
   };
-  if (schema.version !== 1)
+  if (![1, 2].includes(schema.version))
     throw new Error(
       "Unsupported database version. Use a compatible Vesper host.",
     );
@@ -88,6 +90,9 @@ export function openStore(directory: string, expectedWorkspaceId?: string) {
     "Vesper workspace initialized. Keep this file with the database.\n",
     { mode: 0o600 },
   );
+  const updates = new EventEmitter();
+  updates.setMaxListeners(100);
+  const conversations = createConversations(db, () => updates.emit("changed"));
   const codePath = resolve(directory, "pairing-code");
   function createPairingCode() {
     const code = randomBytes(18).toString("base64url");
@@ -175,6 +180,19 @@ export function openStore(directory: string, expectedWorkspaceId?: string) {
       };
     });
   return {
+    ...conversations,
+    subscribeChanges(listener: () => void) {
+      updates.on("changed", listener);
+      return () => {
+        updates.off("changed", listener);
+      };
+    },
+    subscribeRevocations(listener: (id: string) => void) {
+      updates.on("revoked", listener);
+      return () => {
+        updates.off("revoked", listener);
+      };
+    },
     authenticate,
     identity() {
       return db.prepare("SELECT id FROM workspace").get() as { id: string };
@@ -189,6 +207,7 @@ export function openStore(directory: string, expectedWorkspaceId?: string) {
     snapshot(device: Device) {
       return {
         workspace: db.prepare("SELECT * FROM workspace").get() as Workspace,
+        settings: conversations.sharedSettings(),
         device,
         devices: db
           .prepare(
@@ -229,8 +248,10 @@ export function openStore(directory: string, expectedWorkspaceId?: string) {
           db.prepare("DELETE FROM pairing_codes").run();
         }
       });
+      updates.emit("revoked", id);
     },
     close() {
+      updates.removeAllListeners();
       db.close();
     },
   };
