@@ -54,6 +54,7 @@ export function createProviderRuntime(store: Store, adapter: ChatProvider) {
           const proof = event.attestation;
           if (
             proof.selection.accountId !== run.selection.accountId ||
+            proof.account.id !== run.selection.accountId ||
             proof.selection.modelId !== run.selection.modelId ||
             proof.selection.provider !== run.selection.provider ||
             proof.tools.length ||

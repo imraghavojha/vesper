@@ -171,6 +171,7 @@ export function createClaudeAdapter(
     const exit = deferred<void>();
     let child: ChildProcessWithoutNullStreams | undefined;
     let stopping: Promise<boolean> | undefined;
+    let stopRequested = false;
     const state: Session = {
       query: undefined as unknown as Query,
       spawnVerified: false,
@@ -178,6 +179,7 @@ export function createClaudeAdapter(
       exited: false,
       stop() {
         if (stopping) return stopping;
+        stopRequested = true;
         stopping = (async () => {
           try {
             state.query?.close();
@@ -284,6 +286,16 @@ export function createClaudeAdapter(
       },
       stderr: () => {},
       spawnClaudeCodeProcess(parameters) {
+        if (
+          stopRequested ||
+          abortController.signal.aborted ||
+          parameters.signal.aborted
+        ) {
+          throw new ProviderFailure(
+            "unavailable",
+            "Claude launch was cancelled before starting.",
+          );
+        }
         const value = (flag: string) => {
           const inline = parameters.args.find((argument) =>
             argument.startsWith(flag + "="),
@@ -327,6 +339,10 @@ export function createClaudeAdapter(
         state.started = child.pid !== undefined;
         child.stderr.resume();
         child.once("exit", () => {
+          state.exited = true;
+          exit.resolve();
+        });
+        child.once("close", () => {
           state.exited = true;
           exit.resolve();
         });
