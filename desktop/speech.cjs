@@ -220,27 +220,35 @@ function createSpeechController({ executablePath, onEvent }) {
       pendingWriteFailures.delete(failWrite);
       if (child !== process || requests.get(command.id) !== request) return;
       requests.delete(command.id);
-      if (active !== capture) return;
-      if (control && active?.controls[command.command] === command.id)
+      if (
+        active === capture &&
+        control &&
+        active?.controls[command.command] === command.id
+      )
         delete active.controls[command.command];
+      emit(owner, {
+        id: command.id,
+        ...(command.sessionId ? { sessionId: command.sessionId } : {}),
+        type: "error",
+        code: "write-failed",
+        message:
+          "Voice command delivery is unconfirmed. Retry the command or Cancel recording.",
+      });
+      if (active !== capture) return;
       if (!process.pid) {
         ended();
         return;
       }
-      if (active)
+      if (
+        active &&
+        (owner !== active.owner || command.sessionId !== active.sessionId)
+      )
         emit(active.owner, {
           id: active.id,
           sessionId: active.sessionId,
           type: "error",
-          code: "write-failed",
+          code: "capture-transport-error",
           message: "Voice input status is unconfirmed. Retry Cancel.",
-        });
-      else
-        emit(owner, {
-          id: command.id,
-          type: "error",
-          code: "write-failed",
-          message: "Voice command could not be delivered. Try again.",
         });
       try {
         process.kill("SIGKILL");
