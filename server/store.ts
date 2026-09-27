@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { transaction } from "./transaction.js";
 import { createConversations } from "./conversations.js";
+import { createVault } from "./vault/service.js";
 import { EventEmitter } from "node:events";
 import { randomBytes, createHash, randomUUID } from "node:crypto";
 import {
@@ -72,7 +73,7 @@ export function openStore(directory: string, expectedWorkspaceId?: string) {
   const schema = db.prepare("SELECT version FROM schema_version").get() as {
     version: number;
   };
-  if (![1, 2, 3].includes(schema.version))
+  if (![1, 2, 3, 4].includes(schema.version))
     throw new Error(
       "Unsupported database version. Use a compatible Vesper host.",
     );
@@ -93,6 +94,15 @@ export function openStore(directory: string, expectedWorkspaceId?: string) {
   const updates = new EventEmitter();
   updates.setMaxListeners(100);
   const conversations = createConversations(db, () => updates.emit("changed"));
+  const vault = createVault({
+    database: db,
+    workspaceId: (db.prepare("SELECT id FROM workspace").get() as { id: string }).id,
+    dataDirectory: directory,
+    keyFilePath: process.env.VESPER_VAULT_KEY_FILE,
+    startLocked: process.env.VESPER_VAULT_START_LOCKED === "1",
+    appendChange: conversations.appendVaultChange,
+    notify: () => { updates.emit("changed"); },
+  });
   const codePath = resolve(directory, "pairing-code");
   function createPairingCode() {
     const code = randomBytes(18).toString("base64url");
@@ -181,6 +191,11 @@ export function openStore(directory: string, expectedWorkspaceId?: string) {
     });
   return {
     ...conversations,
+    vault,
+    assertDeviceActive(id: string) {
+      if (!db.prepare("SELECT id FROM devices WHERE id=? AND revokedAt IS NULL").get(id))
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "This device no longer has access." });
+    },
     subscribeChanges(listener: () => void) {
       updates.on("changed", listener);
       return () => {

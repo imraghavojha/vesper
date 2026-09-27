@@ -51,7 +51,7 @@ const allowedOrigins = new Set(
 const handler = createHTTPHandler({
   router: appRouter,
   basePath: "/trpc/",
-  maxBodySize: 64 * 1024,
+  maxBodySize: 128 * 1024,
   allowBatching: false,
   createContext({ req }) {
     const auth = req.headers.authorization;

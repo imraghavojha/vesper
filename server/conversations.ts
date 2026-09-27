@@ -160,6 +160,10 @@ export function createConversations(
   );
   return {
     ...providerState,
+    // The vault publishes only metadata invalidation, never a secret payload or hash.
+    appendVaultChange(id: string, revision: number) {
+      return appendChange("vault", id, revision);
+    },
     changeCursor: cursor,
     sharedSettings: settings,
     syncSnapshot(conversationId?: string) {
