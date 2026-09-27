@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import type { Connection } from "../shared/connection.js";
 import type {
   Appearance,
@@ -18,17 +25,190 @@ import { QuickControls } from "./quick-controls.js";
 import { ProviderPanel } from "./provider-panel.js";
 import type { ProviderAvailability } from "../server/providers/contract.js";
 import { askRequestHash } from "../shared/sync.js";
+import {
+  ActivityIcon,
+  ApprovalIcon,
+  IdentityIcon,
+  SettingsIcon,
+  UpcomingIcon,
+  ChevronRightIcon,
+  FileIcon,
+  GridIcon,
+  HandIcon,
+  HelpIcon,
+  LockIcon,
+  MicIcon,
+  MoonIcon,
+  SunIcon,
+  WalletIcon,
+  ArrowUpIcon,
+  BoltIcon,
+  ChatIcon,
+  ChevronDownIcon,
+  CloseIcon,
+  DeviceIcon,
+  ExpandIcon,
+  FeedIcon,
+  GoalIcon,
+  IdeaIcon,
+  LibraryIcon,
+  MenuIcon,
+  ModelIcon,
+  MoreIcon,
+  PanelIcon,
+  PencilIcon,
+  PlusIcon,
+  SearchIcon,
+  StopIcon,
+  VesperAvatar,
+} from "./presentation/icons.js";
+import { Popover } from "./presentation/popover.js";
+import { useMediaQuery } from "./presentation/use-media.js";
+import type { SettingsEntrySection } from "./main.js";
 import "./chat.css";
+import "./presentation/panel.css";
+
+type PanelTab = "activity" | "approvals" | "upcoming" | "identity";
+const PANEL_TABS: Array<{
+  id: PanelTab;
+  label: string;
+  Icon: typeof ModelIcon;
+}> = [
+  { id: "activity", label: "Activity", Icon: ActivityIcon },
+  { id: "approvals", label: "Approvals", Icon: ApprovalIcon },
+  { id: "upcoming", label: "Upcoming", Icon: UpcomingIcon },
+  { id: "identity", label: "Identity", Icon: IdentityIcon },
+];
+// Native Mac settings groups, in reference order. Providers is Vesper's
+// documented addition. `note` marks sections with no Vesper capability yet.
+type SettingsSection =
+  | "general"
+  | "providers"
+  | "connectors"
+  | "computer"
+  | "files"
+  | "dictation"
+  | "wallet"
+  | "secure"
+  | "permissions"
+  | "channels"
+  | "devices"
+  | "data"
+  | "help"
+  | "legal";
+const SETTINGS_SECTIONS: Array<{
+  id: SettingsSection;
+  label: string;
+  Icon: typeof ModelIcon;
+  note?: string;
+}> = [
+  { id: "general", label: "General", Icon: SettingsIcon },
+  { id: "providers", label: "Providers", Icon: ModelIcon },
+  {
+    id: "connectors",
+    label: "Connectors",
+    Icon: GridIcon,
+    note: "Connectors aren’t available in Vesper yet. No services are connected.",
+  },
+  {
+    id: "computer",
+    label: "Computer use",
+    Icon: DeviceIcon,
+    note: "Computer use isn’t available in Vesper yet. Vesper can’t control this Mac.",
+  },
+  {
+    id: "files",
+    label: "File system access",
+    Icon: FileIcon,
+    note: "File system access isn’t available in Vesper yet. Vesper can’t read or change your files.",
+  },
+  { id: "dictation", label: "Dictation", Icon: MicIcon },
+  {
+    id: "wallet",
+    label: "Wallet",
+    Icon: WalletIcon,
+    note: "Wallet isn’t available in Vesper.",
+  },
+  {
+    id: "secure",
+    label: "Secure Store",
+    Icon: ApprovalIcon,
+    note: "Secure Store isn’t available in Vesper yet. No credentials are stored for Vesper to use.",
+  },
+  {
+    id: "permissions",
+    label: "Permissions",
+    Icon: HandIcon,
+    note: "Vesper doesn’t take actions yet, so there are no permissions to manage.",
+  },
+  {
+    id: "channels",
+    label: "Messaging channels",
+    Icon: ChatIcon,
+    note: "Messaging channels aren’t available in Vesper yet. Chat happens only in this app.",
+  },
+  { id: "devices", label: "Devices", Icon: DeviceIcon },
+  {
+    id: "data",
+    label: "Data controls",
+    Icon: LockIcon,
+    note: "Data controls aren’t available here yet. Manage paired devices under Devices.",
+  },
+  {
+    id: "help",
+    label: "Help and support",
+    Icon: HelpIcon,
+    note: "Help and support isn’t available in this build.",
+  },
+  {
+    id: "legal",
+    label: "Legal info",
+    Icon: ApprovalIcon,
+    note: "Legal information isn’t available in this build.",
+  },
+];
+const ENTRY_SECTIONS: ReadonlySet<string> = new Set<SettingsEntrySection>([
+  "general",
+  "providers",
+  "devices",
+  "dictation",
+]);
+/** Validates an untrusted section name against the native entry sections. */
+function entrySection(value: unknown): SettingsEntrySection | null {
+  return typeof value === "string" && ENTRY_SECTIONS.has(value)
+    ? (value as SettingsEntrySection)
+    : null;
+}
+const RUN_LABELS: Record<string, string> = {
+  queued: "Queued",
+  initializing: "Starting",
+  running: "Replying",
+  cancelling: "Stopping",
+  completed: "Completed",
+  cancelled: "Stopped",
+  failed: "Failed",
+  interrupted: "Interrupted",
+};
+// Destinations shown for orientation only; none are implemented yet.
+const UNAVAILABLE_DESTINATIONS = [
+  { label: "Feed", Icon: FeedIcon },
+  { label: "Ideas", Icon: IdeaIcon },
+  { label: "Goals", Icon: GoalIcon },
+  { label: "Library", Icon: LibraryIcon },
+];
 
 type Saved = Connection & { workspaceId: string; mode?: "local" | "remote" };
 type CreationIntent = { requestId: string; title: string };
 const pendingCreations = new Map<string, CreationIntent>();
 export function ConversationScreen({
+  settingsWindow = false,
   connection,
   onWorkspace,
   onRevoked,
   onDisconnect,
 }: {
+  /** Native settings window: render only the settings interior. */
+  settingsWindow?: boolean;
   connection: Saved;
   onWorkspace: () => void;
   onRevoked: () => Promise<void>;
@@ -96,6 +276,91 @@ export function ConversationScreen({
   const [providerLoading, setProviderLoading] = useState(false);
   const [providerError, setProviderError] = useState("");
   const [providerOpen, setProviderOpen] = useState(false);
+  // Presentation only: docked panel visibility, active tab and title filter.
+  // All four panes are measured at 1130px; below that the panel overlays.
+  const wide = useMediaQuery("(min-width: 1130px)");
+  const docked = wide && !quick;
+  const [panelHidden, setPanelHidden] = useState(false);
+  const [panelTab, setPanelTab] = useState<PanelTab>("activity");
+  const [filter, setFilter] = useState("");
+  const filterInput = useRef<HTMLInputElement>(null);
+  const panelClose = useRef<HTMLButtonElement>(null);
+  const panelVisible = docked ? !panelHidden : providerOpen;
+  const settingsDialog = useRef<HTMLDialogElement>(null);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>(
+    () =>
+      (settingsWindow &&
+        entrySection(new URLSearchParams(location.search).get("section"))) ||
+      "general",
+  );
+  // Any newer section choice (native event or sidebar click) outranks a late
+  // response to the initial settingsSection() read.
+  const sectionGeneration = useRef(0);
+  function chooseSection(section: SettingsSection) {
+    sectionGeneration.current++;
+    setSettingsSection(section);
+  }
+  useEffect(() => {
+    const bridge = window.vesperDesktop;
+    if (!settingsWindow || !bridge) return;
+    let current = true;
+    const remove = bridge.onSettingsSection((section) => {
+      const next = entrySection(section);
+      if (!current || !next) return;
+      sectionGeneration.current++;
+      setSettingsSection(next);
+    });
+    const generation = sectionGeneration.current;
+    void bridge
+      .settingsSection()
+      .then((section) => {
+        const next = entrySection(section);
+        if (current && next && sectionGeneration.current === generation)
+          setSettingsSection(next);
+      })
+      .catch(() => {});
+    return () => {
+      current = false;
+      remove();
+    };
+  }, [settingsWindow]);
+  function openPanel(tab: PanelTab) {
+    setPanelTab(tab);
+    if (docked) setPanelHidden(false);
+    else setProviderOpen(true);
+  }
+  function closePanel() {
+    if (docked) setPanelHidden(true);
+    else setProviderOpen(false);
+  }
+  function openSettings(section: SettingsSection) {
+    if (settingsWindow) {
+      chooseSection(section);
+      return;
+    }
+    const openDialog = () => {
+      chooseSection(section);
+      const dialog = settingsDialog.current;
+      if (dialog && !dialog.open) dialog.showModal();
+    };
+    const bridge = window.vesperDesktop;
+    if (bridge?.showSettings)
+      // Only the four validated entry sections cross the bridge.
+      void bridge
+        .showSettings(entrySection(section) ?? "general")
+        .catch(openDialog);
+    else openDialog();
+  }
+  useEffect(() => {
+    if (docked || !providerOpen) return;
+    panelClose.current?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !settingsDialog.current?.open)
+        setProviderOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [docked, providerOpen]);
   const formRequest = useRef<{ id: string; fingerprint: string } | null>(null);
   function requestFor(operation: string, payload: unknown) {
     const fingerprint = JSON.stringify([operation, payload]);
@@ -270,12 +535,91 @@ export function ConversationScreen({
       );
     }
   }
+  const connectionState = sync.online
+    ? "online"
+    : sync.revoked
+      ? "revoked"
+      : !snapshot && !sync.error
+        ? "connecting"
+        : "offline";
+  const connectionLabel = {
+    online: "Connected",
+    revoked: "Access revoked",
+    connecting: "Connecting…",
+    offline: "Disconnected",
+  }[connectionState];
+  const binding = activeSnapshot?.providerBinding ?? null;
+  const run = activeSnapshot?.providerRun ?? null;
+  const runActive = ["queued", "initializing", "running", "cancelling"].includes(
+    run?.status ?? "",
+  );
+  const modelLabel = binding?.modelId ?? "Save only";
+  function cancelRun() {
+    if (activeSnapshot?.providerRun)
+      void mutate(() =>
+        sync.api.cancelProviderRun.mutate({
+          id: activeSnapshot.providerRun!.id,
+        }),
+      );
+  }
+  const query = filter.trim().toLowerCase();
+  const visibleConversations = (snapshot?.conversations ?? []).filter(
+    (item) => !query || item.title.toLowerCase().includes(query),
+  );
+  const mainChats = visibleConversations.filter((item) => item.kind === "main");
+  const sideChats = visibleConversations.filter((item) => item.kind !== "main");
+  function conversationRow(item: Conversation) {
+    return (
+      <button
+        key={item.id}
+        className={
+          item.id === activeId ? "conversation selected" : "conversation"
+        }
+        aria-current={item.id === activeId ? "page" : undefined}
+        onClick={() => {
+          selectConversation(item.id);
+          if (!creationRef.current) {
+            setCreating(false);
+            setEditing(null);
+          }
+        }}
+      >
+        <span>{item.title}</span>
+      </button>
+    );
+  }
+  const modelChip = (
+    <button
+      type="button"
+      className={"model-chip" + (binding ? "" : " model-chip--none")}
+      aria-label={`Model: ${modelLabel}. Open model settings`}
+      title="Model and provider"
+      onClick={() => openSettings("providers")}
+    >
+      <ModelIcon size={15} />
+      <span>{modelLabel}</span>
+      {runActive && (
+        <span className="model-chip__run">
+          {run?.status === "cancelling" ? "Stopping…" : "Replying…"}
+        </span>
+      )}
+      <ChevronDownIcon size={14} />
+    </button>
+  );
   return (
-    <div className={"chat-shell" + (quick ? " quick-chat-shell" : "")}>
+    <div
+      className={
+        "chat-shell" +
+        (quick ? " quick-chat-shell" : "") +
+        (settingsWindow ? " settings-window-shell" : "") +
+        (docked && panelVisible ? " with-panel" : "")
+      }
+    >
       {quick && (
-        <header className="quick-header">
-          <strong>Vesper quick chat</strong>
+        <header className="quick-bar">
+          <VesperAvatar size={22} />
           <select
+            className="quick-bar__select"
             aria-label="Quick chat conversation"
             value={activeId ?? ""}
             onChange={(event) => selectConversation(event.target.value)}
@@ -286,66 +630,218 @@ export function ConversationScreen({
               </option>
             ))}
           </select>
-          <button onClick={() => void window.vesperDesktop?.showMainWindow()}>
-            Open full window
+          {connectionState !== "online" && (
+            <span className={"status-pill " + connectionState} role="status">
+              {connectionLabel}
+            </span>
+          )}
+          <span className="quick-bar__spacer" />
+          {modelChip}
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Open full window"
+            title="Open full window"
+            onClick={() => void window.vesperDesktop?.showMainWindow()}
+          >
+            <ExpandIcon size={18} />
           </button>
-          <button onClick={() => void window.vesperDesktop?.hideQuickChat()}>
-            Dismiss
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Dismiss"
+            title="Dismiss quick chat"
+            onClick={() => void window.vesperDesktop?.hideQuickChat()}
+          >
+            <CloseIcon size={18} />
           </button>
         </header>
       )}
+      {!settingsWindow && (
+      <>
       <nav className="chat-rail" aria-label="Navigation">
-        <span className="chat-brand" aria-label="Vesper">
-          v
-        </span>
-        <button className="rail-selected" aria-label="Chat">
-          ◫
-        </button>
-        <button
-          className="rail-settings"
-          aria-label="Workspace and devices"
-          onClick={onWorkspace}
-        >
-          ⚙
-        </button>
-      </nav>
-      <aside className="chat-sidebar">
-        <div className="sidebar-heading">
-          <strong>Conversations</strong>
+        <div className="rail-group">
           <button
-            aria-label="New side chat"
-            title="New side chat"
-            disabled={!sync.online || busy || !!creationIntent}
-            onClick={() => {
-              formRequest.current = null;
-              setCreating(true);
-              setEditing(null);
-              setTitle("");
-            }}
+            className="rail-button selected"
+            aria-label="Chat"
+            aria-current="page"
+            title="Chat"
           >
-            ＋
+            <span className="rail-icon">
+              <ChatIcon />
+            </span>
           </button>
-        </div>
-        <div className="conversation-list">
-          {snapshot?.conversations.map((item) => (
+          <button
+            className="rail-button"
+            aria-label="Search chat titles"
+            title="Search chat titles"
+            onClick={() => filterInput.current?.focus()}
+          >
+            <span className="rail-icon">
+              <SearchIcon />
+            </span>
+          </button>
+          {UNAVAILABLE_DESTINATIONS.map(({ label, Icon }) => (
             <button
-              key={item.id}
-              className={
-                item.id === activeId ? "conversation selected" : "conversation"
-              }
-              onClick={() => {
-                selectConversation(item.id);
-                if (!creationRef.current) {
-                  setCreating(false);
-                  setEditing(null);
-                }
-              }}
+              key={label}
+              className="rail-button unavailable"
+              aria-disabled="true"
+              aria-label={`${label}, not available yet`}
+              title={`${label} isn’t available in Vesper yet`}
+              onClick={(event) => event.preventDefault()}
             >
-              <span>{item.kind === "main" ? "◫" : "○"}</span>
-              <span>{item.title}</span>
+              <span className="rail-icon">
+                <Icon />
+              </span>
             </button>
           ))}
         </div>
+        <Popover
+          label="App menu"
+          placement="right-end"
+          triggerClassName="rail-button"
+          trigger={
+            <span className="rail-icon">
+              <MenuIcon />
+            </span>
+          }
+        >
+          {(close) => (
+            <div className="menu">
+              <button
+                className="menu-item"
+                onClick={() => {
+                  close();
+                  openSettings("general");
+                }}
+              >
+                <SettingsIcon size={18} /> Settings
+              </button>
+              <button
+                className="menu-item"
+                onClick={() => {
+                  close();
+                  openSettings("providers");
+                }}
+              >
+                <ModelIcon size={18} /> Providers
+              </button>
+              <button
+                className="menu-item"
+                onClick={() => {
+                  close();
+                  onWorkspace();
+                }}
+              >
+                <DeviceIcon size={18} /> Workspace and devices
+              </button>
+              {!panelVisible && (
+                <button
+                  className="menu-item"
+                  onClick={() => {
+                    close();
+                    openPanel(panelTab);
+                  }}
+                >
+                  <PanelIcon size={18} /> Show Vesper panel
+                </button>
+              )}
+            </div>
+          )}
+        </Popover>
+      </nav>
+      <aside className="chat-sidebar" aria-label="Chats">
+        <div className="sidebar-top">
+          <label className="sidebar-search">
+            <SearchIcon size={20} />
+            <input
+              ref={filterInput}
+              type="search"
+              aria-label="Search chat titles"
+              placeholder="Search chat titles"
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setFilter("");
+              }}
+            />
+          </label>
+          <Popover
+            label="Chat options"
+            triggerClassName="icon-button"
+            trigger={<MoreIcon size={20} />}
+          >
+            {(close) => (
+              <div className="menu">
+                <button
+                  className="menu-item"
+                  disabled={!sync.online || busy || !!creationIntent}
+                  onClick={() => {
+                    close();
+                    formRequest.current = null;
+                    setCreating(true);
+                    setEditing(null);
+                    setTitle("");
+                  }}
+                >
+                  <PlusIcon size={18} /> New side chat
+                </button>
+                <button
+                  className="menu-item"
+                  disabled={
+                    !conversation || !sync.online || busy || !!creationIntent
+                  }
+                  onClick={() => {
+                    close();
+                    if (conversation) {
+                      formRequest.current = null;
+                      setTitle(conversation.title);
+                      setEditing({
+                        id: conversation.id,
+                        revision: conversation.revision,
+                      });
+                      setCreating(false);
+                    }
+                  }}
+                >
+                  <PencilIcon size={18} /> Rename conversation
+                </button>
+              </div>
+            )}
+          </Popover>
+        </div>
+        <div className="conversation-list">
+          {mainChats.map(conversationRow)}
+          <div className="sidebar-section">
+            <span>Side chats</span>
+            <button
+              className="icon-button icon-button--small"
+              aria-label="New side chat"
+              title="New side chat"
+              disabled={!sync.online || busy || !!creationIntent}
+              onClick={() => {
+                formRequest.current = null;
+                setCreating(true);
+                setEditing(null);
+                setTitle("");
+              }}
+            >
+              <PlusIcon size={18} />
+            </button>
+          </div>
+          {sideChats.map(conversationRow)}
+          {query && visibleConversations.length === 0 && (
+            <p className="sidebar-empty" role="status">
+              No chat titles match “{filter.trim()}”.
+            </p>
+          )}
+          {!snapshot && (
+            <p className="sidebar-empty" role="status">
+              {connectionState === "connecting"
+                ? "Loading chats…"
+                : "Chats appear once connected."}
+            </p>
+          )}
         {(creating || editing) && (
           <form
             className="conversation-form"
@@ -415,75 +911,32 @@ export function ConversationScreen({
             )}
           </form>
         )}
-        <div className="compact-appearance">
-          <label htmlFor="compact-appearance">Appearance</label>
-          <select
-            id="compact-appearance"
-            value={appearance ?? "system"}
-            disabled={!sync.online || busy || !snapshot}
-            onChange={(event) =>
-              void mutate(() =>
-                sync.api.setAppearance.mutate({
-                  requestId: crypto.randomUUID(),
-                  appearance: event.target.value as Appearance,
-                  expectedRevision: snapshot!.settings.revision,
-                }),
-              )
-            }
+        </div>
+        {connectionState !== "online" && (
+          <button
+            className={"sidebar-status " + connectionState}
+            onClick={() => openSettings("devices")}
           >
-            <option value="system">System</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </div>
-        <div className="sidebar-footer">
-          <span
-            className={sync.online ? "connection-dot online" : "connection-dot"}
-          />
-          {sync.online
-            ? "Connected"
-            : sync.revoked
-              ? "Access revoked"
-              : "Disconnected"}
-          <small>
-            {connection.mode === "local"
-              ? "Workspace on this Mac"
-              : "Shared host"}
-          </small>
-        </div>
+            <span className="connection-dot" aria-hidden="true" />
+            {connectionLabel}
+          </button>
+        )}
       </aside>
-      <main className="conversation-main">
-        <div className="conversation-heading">
-          <div>
-            <h1>{conversation?.title ?? "Your conversations"}</h1>
-            <span>
-              {snapshot?.providerBinding?.modelId ?? "No provider connected"}
-            </span>
-          </div>
+      <main
+        className="conversation-main"
+        aria-label={conversation?.title ?? "Conversation"}
+      >
+        {!quick && !panelVisible && (
           <button
-            aria-label="Rename conversation"
-            disabled={!conversation || !sync.online || busy || !!creationIntent}
-            onClick={() => {
-              if (conversation) {
-                formRequest.current = null;
-                setTitle(conversation.title);
-                setEditing({
-                  id: conversation.id,
-                  revision: conversation.revision,
-                });
-                setCreating(false);
-              }
-            }}
+            type="button"
+            className="icon-button panel-reveal"
+            aria-label="Show Vesper panel"
+            title="Show Vesper panel"
+            onClick={() => openPanel(panelTab)}
           >
-            Rename
+            <PanelIcon size={20} />
           </button>
-          <button
-            className="provider-toggle"
-            onClick={() => setProviderOpen(!providerOpen)}
-          >
-            Provider
-          </button>
-        </div>
+        )}
         {(sync.error || error) && (
           <div className="chat-notice" role="alert">
             <p>{error || sync.error}</p>
@@ -500,6 +953,9 @@ export function ConversationScreen({
             connection={connection}
             conversation={conversation}
             sync={sync}
+            onChooseModel={() => openSettings("providers")}
+            onStop={cancelRun}
+            stopDisabled={busy || run?.status === "cancelling"}
           />
         ) : (
           <div className="chat-empty" role="status">
@@ -507,18 +963,214 @@ export function ConversationScreen({
           </div>
         )}
       </main>
-      <aside className={"chat-agent" + (providerOpen ? " provider-open" : "")}>
-        <button
-          className="provider-toggle"
+      {!docked && providerOpen && (
+        <div
+          className="agent-scrim"
+          aria-hidden="true"
           onClick={() => setProviderOpen(false)}
+        />
+      )}
+      <aside
+        className={"agent-panel" + (docked ? " docked" : " overlay")}
+        aria-label="Vesper panel"
+        hidden={!panelVisible}
+      >
+        <button
+          ref={panelClose}
+          type="button"
+          className="icon-button agent-close"
+          aria-label="Close Vesper panel"
+          title="Close"
+          onClick={closePanel}
         >
-          Close provider panel
+          <CloseIcon size={20} />
         </button>
-        <div className="agent-placeholder" aria-hidden="true">
-          v
+        <div className="agent-identity">
+          <span className="agent-avatar">
+            <VesperAvatar size={100} />
+          </span>
+          <h2>Vesper</h2>
+          <p className={"agent-status " + connectionState} role="status">
+            {connectionState === "online" && <BoltIcon size={16} />}
+            {connectionState !== "online" && (
+              <span className="connection-dot" aria-hidden="true" />
+            )}
+            {connectionLabel}
+          </p>
         </div>
-        <h2>Vesper</h2>
-        <ProviderPanel
+        <div className="agent-tabs-wrap">
+          <div
+            className="agent-tabs"
+            role="tablist"
+            aria-label="Vesper panel sections"
+            onKeyDown={(event) => {
+              if (event.key !== "ArrowRight" && event.key !== "ArrowLeft")
+                return;
+              const index = PANEL_TABS.findIndex((tab) => tab.id === panelTab);
+              const step = event.key === "ArrowRight" ? 1 : -1;
+              const next =
+                PANEL_TABS[(index + step + PANEL_TABS.length) % PANEL_TABS.length]!;
+              setPanelTab(next.id);
+              event.currentTarget
+                .querySelector<HTMLElement>(`#agent-tab-${next.id}`)
+                ?.focus();
+            }}
+          >
+            {PANEL_TABS.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                id={`agent-tab-${id}`}
+                type="button"
+                role="tab"
+                className="agent-tab"
+                aria-selected={panelTab === id}
+                aria-controls="agent-tabpanel"
+                aria-label={label}
+                title={label}
+                tabIndex={panelTab === id ? 0 : -1}
+                onClick={() => setPanelTab(id)}
+              >
+                <Icon size={18} />
+              </button>
+            ))}
+          </div>
+        </div>
+        <div
+          id="agent-tabpanel"
+          className="agent-tabpanel"
+          role="tabpanel"
+          aria-labelledby={`agent-tab-${panelTab}`}
+        >
+          <div hidden={panelTab !== "activity"}>
+            {run ? (
+              <>
+                <ul className="activity-list" aria-label="Latest reply in this chat">
+                  <li className={"activity-row status-" + run.status}>
+                    <div className="activity-row__main">
+                      <span className="activity-row__title">
+                        Reply · {run.selection.modelId}
+                      </span>
+                      <span className="activity-row__outcome">
+                        {RUN_LABELS[run.status] ?? run.status}
+                      </span>
+                    </div>
+                    <time dateTime={run.completedAt ?? run.createdAt}>
+                      {new Date(run.completedAt ?? run.createdAt).toLocaleString(
+                        [],
+                        {
+                          month: "short",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        },
+                      )}
+                    </time>
+                  </li>
+                </ul>
+                {runActive && (
+                  <button
+                    type="button"
+                    className="pill-button activity-stop"
+                    disabled={
+                      busy || !sync.online || run.status === "cancelling"
+                    }
+                    onClick={cancelRun}
+                  >
+                    {run.status === "cancelling" ? "Stopping…" : "Stop reply"}
+                  </button>
+                )}
+                {run.error && (
+                  <p className="panel-error" role="alert">
+                    {run.error}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="panel-empty">
+                {activeSnapshot
+                  ? "No replies have run in this chat."
+                  : "Open a chat to see its latest reply."}
+              </p>
+            )}
+          </div>
+          <p className="panel-empty" hidden={panelTab !== "approvals"}>
+            Vesper doesn’t take actions yet, so there is nothing to approve.
+          </p>
+          <p className="panel-empty" hidden={panelTab !== "upcoming"}>
+            Scheduled work isn’t available yet. Nothing runs on a schedule.
+          </p>
+          <p className="panel-empty" hidden={panelTab !== "identity"}>
+            Identity settings aren’t available yet.
+          </p>
+        </div>
+      </aside>
+      </>
+      )}
+      <SettingsFrame
+        windowMode={settingsWindow}
+        dialogRef={settingsDialog}
+        labelledBy="settings-title"
+      >
+        <div className="settings-surface">
+          <nav className="settings-nav" aria-label="Settings sections">
+            <h2 id="settings-title" className="sr-only">
+              Settings
+            </h2>
+            {SETTINGS_SECTIONS.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                className="settings-nav__item"
+                aria-current={settingsSection === id ? "page" : undefined}
+                onClick={() => chooseSection(id)}
+              >
+                <Icon size={16} />
+                {label}
+              </button>
+            ))}
+          </nav>
+          <div className="settings-main">
+            <header className="settings-header">
+              <h3>
+                {
+                  SETTINGS_SECTIONS.find((item) => item.id === settingsSection)
+                    ?.label
+                }
+              </h3>
+              {!settingsWindow && (
+                <form method="dialog">
+                  <button
+                    className="settings-close"
+                    aria-label="Close settings"
+                    title="Close"
+                  >
+                    <CloseIcon size={16} />
+                  </button>
+                </form>
+              )}
+            </header>
+            <div className="settings-body">
+              {(error || sync.error) && (
+                <p className="panel-error settings-error">
+                  {error || sync.error}
+                </p>
+              )}
+          {SETTINGS_SECTIONS.map(({ id, note }) =>
+            note ? (
+              <div
+                key={id}
+                className="settings-card settings-card--note"
+                hidden={settingsSection !== id}
+              >
+                {note}
+              </div>
+            ) : null,
+          )}
+          <section
+            className="settings-card settings-card--padded"
+            hidden={settingsSection !== "providers"}
+          >
+            <ProviderPanel
           key={connection.workspaceId + ":" + activeId}
           availability={availability}
           selection={activeSnapshot?.providerBinding ?? null}
@@ -528,53 +1180,159 @@ export function ConversationScreen({
           error={providerError}
           onRefresh={() => void refreshProvider()}
           onSelect={(modelId) => void selectProvider(modelId)}
-          onCancel={() => {
-            if (activeSnapshot?.providerRun)
-              void mutate(() =>
-                sync.api.cancelProviderRun.mutate({
-                  id: activeSnapshot.providerRun!.id,
-                }),
-              );
-          }}
-        />
-        <section className="appearance">
-          <h3>Appearance</h3>
-          <div role="group" aria-label="Shared appearance">
-            {(["light", "dark", "system"] as Appearance[]).map((value) => (
-              <button
-                key={value}
-                aria-pressed={appearance === value}
-                disabled={!sync.online || busy || !snapshot}
-                onClick={() =>
-                  void mutate(() =>
-                    sync.api.setAppearance.mutate({
-                      requestId: crypto.randomUUID(),
-                      appearance: value,
-                      expectedRevision: snapshot!.settings.revision,
-                    }),
-                  )
-                }
-              >
-                {value[0]!.toUpperCase() + value.slice(1)}
-              </button>
-            ))}
+          onCancel={cancelRun}
+            />
+          </section>
+          <div hidden={settingsSection !== "general"}>
+            <h4 className="settings-group-label">Appearance</h4>
+            <div className="settings-card">
+              <div className="settings-row">
+                <span id="settings-mode-label">Mode</span>
+            <div
+              className="mode-switch"
+              role="group"
+              aria-label="Shared appearance"
+            >
+              {(["light", "dark", "system"] as Appearance[]).map((value) => (
+                <button
+                  key={value}
+                  aria-label={value[0]!.toUpperCase() + value.slice(1)}
+                  title={value[0]!.toUpperCase() + value.slice(1)}
+                  aria-pressed={appearance === value}
+                  disabled={!sync.online || busy || !snapshot}
+                  onClick={() =>
+                    void mutate(() =>
+                      sync.api.setAppearance.mutate({
+                        requestId: crypto.randomUUID(),
+                        appearance: value,
+                        expectedRevision: snapshot!.settings.revision,
+                      }),
+                    )
+                  }
+                >
+                  {value === "light" ? (
+                    <SunIcon size={16} />
+                  ) : value === "dark" ? (
+                    <MoonIcon size={16} />
+                  ) : (
+                    <DeviceIcon size={16} />
+                  )}
+                </button>
+              ))}
+            </div>
+              </div>
+            </div>
+            <p className="settings-footnote">
+              Shared across your devices. System follows each device.
+            </p>
+            <h4 className="settings-group-label">Quick Chat</h4>
+            <div className="settings-card settings-card--padded">
+              {window.vesperDesktop ? (
+                <QuickControls />
+              ) : (
+                <p className="settings-muted">
+                  Quick Chat is available in the Mac app.
+                </p>
+              )}
+            </div>
           </div>
-          <p>Shared across connected clients. System follows each device.</p>
-        </section>
-        <div className="agent-info">
-          <h3>Private drafts</h3>
-          <p>
-            Unsent text stays{" "}
-            {window.vesperDesktop
-              ? "encrypted on this Mac"
-              : "in this browser tab"}
-            . Reconnecting never sends it.
-          </p>
+          <div hidden={settingsSection !== "dictation"}>
+            <div className="settings-card settings-card--note">
+              {window.vesperDesktop
+                ? "Dictation turns speech into a private draft using on-device recognition. Use the microphone button in the message box to check availability, prepare voice and record. It never sends automatically."
+                : "Dictation is available in the Mac app."}
+            </div>
+          </div>
+          <div hidden={settingsSection !== "devices"}>
+            <h4 className="settings-group-label">This device</h4>
+            <div className="settings-card settings-card--padded">
+            <dl className="panel-facts">
+              <div>
+                <dt>Status</dt>
+                <dd>{connectionLabel}</dd>
+              </div>
+              <div>
+                <dt>Workspace</dt>
+                <dd>
+                  {connection.mode === "local" ? "On this Mac" : "Shared host"}
+                </dd>
+              </div>
+              <div>
+                <dt>Drafts</dt>
+                <dd>
+                  {window.vesperDesktop
+                    ? "Encrypted on this Mac"
+                    : "In this browser tab"}
+                </dd>
+              </div>
+            </dl>
+            </div>
+            <p className="settings-footnote">
+              Unsent text never sends on reconnect.
+            </p>
+            <div className="panel-actions">
+              {sync.revoked ? (
+                <button className="pill-button" onClick={onDisconnect}>
+                  Disconnect this device
+                </button>
+              ) : (
+                !sync.online && (
+                  <button className="pill-button" onClick={() => void reconnect()}>
+                    Reconnect
+                  </button>
+                )
+              )}
+            </div>
+            <h4 className="settings-group-label">Paired devices</h4>
+            <button
+              type="button"
+              className="settings-card settings-row settings-row--link"
+              onClick={onWorkspace}
+            >
+              <span>Workspace and devices</span>
+              <ChevronRightIcon size={18} />
+            </button>
+          </div>
+            </div>
+          </div>
         </div>
-        <button onClick={onWorkspace}>Workspace and devices</button>
-        <QuickControls />
-      </aside>
+      </SettingsFrame>
     </div>
+  );
+}
+
+/**
+ * Browser fallback shows settings as a modal dialog; the native settings
+ * window renders the same interior as its whole content.
+ */
+function SettingsFrame({
+  windowMode,
+  dialogRef,
+  labelledBy,
+  children,
+}: {
+  windowMode: boolean;
+  dialogRef: RefObject<HTMLDialogElement | null>;
+  labelledBy: string;
+  children: ReactNode;
+}) {
+  if (windowMode)
+    return (
+      <main className="settings-window" aria-labelledby={labelledBy}>
+        {children}
+      </main>
+    );
+  return (
+    <dialog
+      ref={dialogRef}
+      className="settings-dialog"
+      aria-labelledby={labelledBy}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) event.currentTarget.close();
+      }}
+    >
+      {children}
+    </dialog>
   );
 }
 
@@ -582,10 +1340,16 @@ function ConversationBody({
   connection,
   conversation,
   sync,
+  onChooseModel,
+  onStop,
+  stopDisabled,
 }: {
   connection: Saved;
   conversation: Conversation;
   sync: ReturnType<typeof useSync>;
+  onChooseModel: () => void;
+  onStop: () => void;
+  stopDisabled: boolean;
 }) {
   const [draft, setDraft] = useState<Draft>({ text: "", pending: null });
   const draftRef = useRef(draft);
@@ -943,55 +1707,101 @@ function ConversationBody({
               80;
         }}
       >
-        {hasMore && (
-          <button
-            className="load-earlier"
-            disabled={olderBusy || !sync.online}
-            onClick={() => void earlier()}
-          >
-            {olderBusy ? "Loading…" : "Load earlier messages"}
-          </button>
-        )}
-        {messages.length === 0 && (
-          <div className="chat-empty">
-            <h2>Your conversation starts here</h2>
-            <p>
-              {binding
-                ? "Send a message to the selected Claude account. This connection supports chat only."
-                : "Write a message to save it in this workspace, or select a provider for replies."}
-            </p>
-          </div>
-        )}
-        {messages.map((message) => (
-          <article className={"message " + message.role} key={message.id}>
-            <div className="message-text">
-              {message.text ||
-                (message.role === "assistant"
-                  ? [
-                      "completed",
-                      "cancelled",
-                      "failed",
-                      "interrupted",
-                    ].includes(message.status ?? "")
-                    ? "No reply text was received."
-                    : "Waiting for provider…"
-                  : "")}
-            </div>
-            <small>
-              {message.role === "user" ? "You" : "Assistant"} ·{" "}
-              {new Date(message.createdAt).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}{" "}
-              ·{" "}
-              {message.role === "assistant"
-                ? (message.status ?? "completed")
-                : "Saved"}
-            </small>
-          </article>
-        ))}
+        <div className="message-column">
+          {hasMore && (
+            <button
+              className="load-earlier"
+              disabled={olderBusy || !sync.online}
+              onClick={() => void earlier()}
+            >
+              {olderBusy ? "Loading…" : "Load earlier messages"}
+            </button>
+          )}
+          {messages.map((message, index) => {
+            const previous = messages[index - 1];
+            const next = messages[index + 1];
+            const day = new Date(message.createdAt).toDateString();
+            const newDay =
+              !previous || new Date(previous.createdAt).toDateString() !== day;
+            const joinsPrevious =
+              !newDay && previous?.role === message.role;
+            const joinsNext =
+              next?.role === message.role &&
+              new Date(next.createdAt).toDateString() === day;
+            const status = message.status ?? "completed";
+            const settled = [
+              "completed",
+              "cancelled",
+              "failed",
+              "interrupted",
+            ].includes(status);
+            const time = new Date(message.createdAt).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+            return (
+              <div className="message-group" key={message.id}>
+                {newDay && (
+                  <div className="day-divider">
+                    {new Date(message.createdAt).toLocaleDateString([], {
+                      weekday: "long",
+                      month: "long",
+                      day: "numeric",
+                    })}
+                  </div>
+                )}
+                <article
+                  className={
+                    "message " +
+                    message.role +
+                    (joinsPrevious ? " joins-previous" : "") +
+                    (joinsNext ? " joins-next" : "") +
+                    (message.role === "assistant" && status !== "completed"
+                      ? " status-" + status
+                      : "")
+                  }
+                >
+                  <span className="sr-only">
+                    {message.role === "user" ? "You" : "Vesper"}, {time}
+                    {message.role === "assistant" ? `, ${status}` : ""}:
+                  </span>
+                  <div className="message-text" title={time}>
+                    {message.text ||
+                      (message.role === "assistant" ? (
+                        settled ? (
+                          <span className="message-muted">
+                            No reply text was received.
+                          </span>
+                        ) : (
+                          <span className="message-waiting">
+                            <span className="typing" aria-hidden="true">
+                              <i />
+                              <i />
+                              <i />
+                            </span>
+                            Waiting for provider…
+                          </span>
+                        )
+                      ) : (
+                        ""
+                      ))}
+                  </div>
+                  {message.role === "assistant" &&
+                    (status === "failed" || status === "interrupted") && (
+                      <small className="message-status" aria-hidden="true">
+                        {status === "failed"
+                          ? "Reply failed"
+                          : "Reply interrupted"}
+                      </small>
+                    )}
+                </article>
+              </div>
+            );
+          })}
+        </div>
       </div>
       <div className="composer-area">
+        <div className="composer-column">
         {(draftError || sendError) && (
           <div className="chat-notice" role="alert">
             <p>{draftError || sendError}</p>
@@ -1034,6 +1844,43 @@ function ConversationBody({
             void send();
           }}
         >
+          <Popover
+            label="Add to message"
+            placement="above-start"
+            triggerClassName="composer-icon"
+            trigger={<PlusIcon size={20} />}
+          >
+            {(close) => (
+              <div className="menu">
+                <button
+                  type="button"
+                  className="menu-item"
+                  onClick={() => {
+                    close();
+                    onChooseModel();
+                  }}
+                >
+                  <ModelIcon size={18} />
+                  <span>
+                    Model
+                    <small>{binding?.modelId ?? "Save only"}</small>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="menu-item"
+                  disabled
+                  title="Attachments aren’t available in Vesper yet"
+                >
+                  <PlusIcon size={18} />
+                  <span>
+                    Attach files
+                    <small>Not available yet</small>
+                  </span>
+                </button>
+              </div>
+            )}
+          </Popover>
           <textarea
             aria-label="Message"
             placeholder={
@@ -1042,7 +1889,7 @@ function ConversationBody({
             value={draft.text}
             maxLength={10000}
             disabled={!ready || sync.revoked}
-            rows={2}
+            rows={1}
             onChange={(event) => {
               void persist({
                 ...draftRef.current,
@@ -1060,44 +1907,73 @@ function ConversationBody({
               }
             }}
           />
-          <button
-            aria-label={
-              binding
-                ? "Send message to selected provider"
-                : "Save message to workspace"
-            }
-            disabled={
-              !ready ||
-              !sync.online ||
-              sending ||
-              replyActive ||
-              !!pending ||
-              !draft.text.trim() ||
-              !!draftError
-            }
-            type="submit"
-          >
-            ↑
-          </button>
+          <div className="composer-actions">
+            <Dictation
+              disabled={!ready || !!draftError || sync.revoked}
+              onInsert={async (text) => {
+                const current = draftRef.current;
+                const next = current.text ? current.text + "\n" + text : text;
+                if (next.length > 10000)
+                  throw new Error("Transcript exceeds draft limit.");
+                await persist({ ...current, text: next }).catch(() => {});
+              }}
+            />
+            {replyActive ? (
+              <button
+                type="button"
+                className="composer-send composer-send--stop"
+                aria-label={
+                  sync.snapshot?.providerRun?.status === "cancelling"
+                    ? "Stopping reply"
+                    : "Stop reply"
+                }
+                title="Stop reply"
+                disabled={stopDisabled || !sync.online}
+                onClick={onStop}
+              >
+                <StopIcon size={18} />
+              </button>
+            ) : (
+              <button
+                className="composer-send"
+                aria-label={
+                  binding
+                    ? "Send message to selected provider"
+                    : "Save message to workspace"
+                }
+                title={binding ? "Send" : "Save without a reply"}
+                disabled={
+                  !ready ||
+                  !sync.online ||
+                  sending ||
+                  replyActive ||
+                  !!pending ||
+                  !draft.text.trim() ||
+                  !!draftError
+                }
+                type="submit"
+              >
+                <ArrowUpIcon size={18} />
+              </button>
+            )}
+          </div>
         </form>
         <div className="composer-status">
-          <span role="status">{savedState}</span>
-          <span>
-            {binding
-              ? "Chat only · no tools or external actions"
-              : "Messages are saved. No provider is connected."}
+          <span role="status" className={draftError ? "" : "sr-only"}>
+            {savedState}
           </span>
+          {!binding && (
+            <button
+              type="button"
+              className="composer-hint"
+              onClick={onChooseModel}
+            >
+              No model selected — messages are saved without a reply.{" "}
+              <span>Choose a model</span>
+            </button>
+          )}
         </div>
-        <Dictation
-          disabled={!ready || !!draftError || sync.revoked}
-          onInsert={async (text) => {
-            const current = draftRef.current;
-            const next = current.text ? current.text + "\n" + text : text;
-            if (next.length > 10000)
-              throw new Error("Transcript exceeds draft limit.");
-            await persist({ ...current, text: next }).catch(() => {});
-          }}
-        />
+        </div>
       </div>
     </>
   );

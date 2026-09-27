@@ -99,7 +99,7 @@ Persist schedules and attempts. A next-due timer wakes deterministic scheduling 
 
 Journal external-write intent, attempt and outcome. A remote send/submit cannot be atomically committed with SQLite. Reconcile uncertain outcomes where possible and otherwise ask before repeating. Use remote IDs/idempotency where available and protect manual calendar edits.
 
-Google Calendar/Gmail use supported APIs and per-account cursors. Canvas prefers institution API/token access. SubItUp and permitted Outlook fallback reuse browser sessions. Google Messages remains experimental paired-web functionality. The full Muse integration catalog stays in scope with honest availability states.
+Direct connectors are the primary route where available and permitted. Google Calendar/Gmail use supported APIs and per-account cursors. Canvas prefers permitted institution API access. SubItUp uses Vesper's shared browser because it has no connector. This user's university Outlook account uses the browser; other Outlook accounts use direct Microsoft connectors where permitted. Browser access never overrides an organization's restrictions. Google Messages remains experimental paired-web functionality. The full Muse integration catalog stays in scope with honest availability states.
 
 ## T3 reuse
 

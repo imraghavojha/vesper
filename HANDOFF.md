@@ -8,6 +8,8 @@ Also read [architecture and concrete reuse](docs/architecture-and-reuse.md). The
 
 ## Current state
 
+- The active phase is polished Mac-only delivery. Claude Opus 5.5 owns the reference-based UI replacement; the existing functional scaffold is not an accepted final design. Use fresh Muse frames and interaction evidence before implementing visual changes. Android and Calendar implementation wait while the Mac UI is corrected.
+
 - IMR-14 adds a Mac quick-chat window using the same conversations, provider runs and encrypted drafts as the full window. Shortcut conflicts are visible and do not alter other apps. Explicit voice controls use a bundled Apple on-device speech helper; voice produces an unsent draft. Actual microphone permission/capture still requires a present-user verification; synthetic file transcription is separate evidence. The complete reference layout, motion, attachments/search/reactions and Android remain open.
 
 - IMR-10 adds the first connected provider: Claude chat through its maintained Agent SDK, pinned to the discovered account and selected model. Messages and run receipts persist together; interrupted runs never restart automatically. Tools, MCP, inherited project instructions and external connectors are disabled. This is a chat-only slice, not completion of the broader provider or Claude action contracts.
@@ -24,7 +26,7 @@ Also read [architecture and concrete reuse](docs/architecture-and-reuse.md). The
 
 ## Next agent
 
-Continue V02 for remaining shared-workspace acceptance, with Mac-first delivery before Android as requested. V01 still owns the complete reference target. V22 handles review-service setup. V24 can proceed after avatar/motion references are settled. Browser sessions, local secure filling and shared types precede real connector implementation. Claim the corresponding Linear issue before work and use its ID in the branch/PR.
+Continue IMR-14 with Opus-led Mac visual and interaction parity. Preserve the working backend, provider runs, shared drafts and trusted IPC. After this UI work, prioritize the direct Google Calendar connector and its required encrypted credential storage. Direct connectors are primary where available and permitted; SubItUp uses Vesper's browser, this user's university Outlook uses the browser, and other Outlook accounts use direct connectors where permitted. Do not turn every service into a browser-only integration. Claim the corresponding Linear issue before work and use its ID in the branch/PR.
 
 Do not claim perfect cloning from screenshots alone. Active browser details, Android UI, motion timings and less common dialogs still need evidence. Do not copy Muse's inconsistent month-end scheduling: its chat, goal description and upcoming date disagree.
 

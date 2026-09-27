@@ -55,6 +55,16 @@ const drafts = createDraftStore({
 });
 const draftCoordinator = createDraftCoordinator(drafts);
 let mainWindow = null;
+let settingsWindow = null;
+let settingsReady = null;
+let currentSettingsSection = "general";
+const windowModes = new Map();
+const settingsSections = new Set([
+  "general",
+  "providers",
+  "devices",
+  "dictation",
+]);
 let quickChat = null;
 let activeConversation = null;
 const speech = createSpeechController({
@@ -317,6 +327,22 @@ function installBridge() {
     requireTrustedCaller(event);
     showMain();
   });
+  ipcMain.handle("vesper:settings:show", (event, section = "general") => {
+    requireTrustedCaller(event);
+    return showSettings(section);
+  });
+  ipcMain.handle("vesper:settings:section", (event) => {
+    requireTrustedCaller(event);
+    return currentSettingsSection;
+  });
+  ipcMain.handle("vesper:settings:close", async (event) => {
+    requireTrustedCaller(event);
+    const target = BrowserWindow.fromWebContents(event.sender);
+    if (target !== settingsWindow)
+      throw new Error("Only Settings can close its window.");
+    await speech.cancelOwner(event.sender);
+    if (!target.isDestroyed()) target.close();
+  });
   ipcMain.handle("vesper:conversation:get", (event) => {
     requireTrustedCaller(event);
     return activeConversation?.workspaceId === storedConnection?.workspaceId
@@ -509,15 +535,30 @@ app.on("web-contents-created", (_event, contents) => {
     if (!trustedUrl(event.url)) event.preventDefault();
   });
 });
-function createWindow(quick = false) {
+function createWindow(mode = "main", section = "general") {
+  const quick = mode === "quick";
+  const settings = mode === "settings";
   const win = new BrowserWindow({
-    width: quick ? 600 : 1130,
-    height: quick ? 600 : 780,
-    minWidth: quick ? 380 : 900,
-    minHeight: quick ? 360 : 650,
-    show: !quick,
+    width: quick ? 600 : settings ? 800 : 1130,
+    height: quick ? 600 : settings ? 600 : 780,
+    minWidth: quick ? 380 : settings ? 800 : 900,
+    minHeight: quick ? 360 : settings ? 600 : 650,
+    show: mode === "main",
+    ...(settings && process.platform === "darwin"
+      ? {
+          titleBarStyle: "hidden",
+          trafficLightPosition: { x: 9, y: 9 },
+          minimizable: false,
+          maximizable: false,
+          fullscreenable: false,
+        }
+      : {}),
     alwaysOnTop: quick,
-    title: quick ? "Vesper Quick Chat" : "Vesper",
+    title: quick
+      ? "Vesper Quick Chat"
+      : settings
+        ? "Vesper Settings"
+        : "Vesper",
     backgroundColor: "#191919",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
@@ -529,6 +570,7 @@ function createWindow(quick = false) {
     },
   });
   windows.add(win);
+  windowModes.set(win, mode);
   const contents = win.webContents;
   const cancelCapture = () => {
     void speech.cancelOwner(contents).catch(() => {
@@ -546,7 +588,12 @@ function createWindow(quick = false) {
   };
   win.on("closed", () => {
     windows.delete(win);
+    windowModes.delete(win);
     if (mainWindow === win) mainWindow = null;
+    if (settingsWindow === win) {
+      settingsWindow = null;
+      settingsReady = null;
+    }
     cancelCapture();
   });
   win.on("hide", () => {
@@ -558,12 +605,21 @@ function createWindow(quick = false) {
   win.webContents.on("render-process-gone", () => {
     cancelCapture();
   });
-  win.loadURL(RENDERER_IDENTITY + (quick ? "/?quick=1" : "/")).catch(() => {
-    dialog.showErrorBox(
-      "Vesper",
-      "The bundled workspace could not load. Reinstall the app or rebuild it from source.",
-    );
-  });
+  win
+    .loadURL(
+      RENDERER_IDENTITY +
+        (quick
+          ? "/?quick=1"
+          : settings
+            ? "/?settings=1&section=" + encodeURIComponent(section)
+            : "/"),
+    )
+    .catch(() => {
+      dialog.showErrorBox(
+        "Vesper",
+        "The bundled workspace could not load. Reinstall the app or rebuild it from source.",
+      );
+    });
   return win;
 }
 function showMain() {
@@ -571,6 +627,55 @@ function showMain() {
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
+}
+async function showSettings(section) {
+  if (!settingsSections.has(section))
+    throw new Error("Unknown Settings section.");
+  currentSettingsSection = section;
+  if (!settingsWindow || settingsWindow.isDestroyed()) {
+    const created = createWindow("settings", section);
+    const contents = created.webContents;
+    settingsWindow = created;
+    settingsReady = new Promise((resolve, reject) => {
+      let finished = false;
+      const finish = (error) => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        created.removeListener("ready-to-show", ready);
+        created.removeListener("closed", closed);
+        contents.removeListener("did-fail-load", failed);
+        if (error) reject(new Error(error));
+        else resolve();
+      };
+      const ready = () => finish();
+      const closed = () => finish("Settings closed before loading.");
+      const failed = (_event, _code, _description, _url, isMainFrame) => {
+        if (isMainFrame) finish("Settings could not load.");
+      };
+      const timer = setTimeout(
+        () => finish("Settings did not finish loading."),
+        10000,
+      );
+      created.once("ready-to-show", ready);
+      created.once("closed", closed);
+      contents.on("did-fail-load", failed);
+    });
+    void settingsReady.catch(() => {});
+  }
+  const target = settingsWindow;
+  try {
+    await settingsReady;
+  } catch (error) {
+    if (!target.isDestroyed()) target.destroy();
+    throw error;
+  }
+  if (target !== settingsWindow || target.isDestroyed())
+    throw new Error("Settings is closed.");
+  if (target.isMinimized()) target.restore();
+  target.show();
+  target.focus();
+  target.webContents.send("vesper:settings:section", currentSettingsSection);
 }
 app.whenReady().then(() => {
   const ses = session.fromPartition(PARTITION);
@@ -618,13 +723,13 @@ app.whenReady().then(() => {
   });
   installBridge();
   quickChat = createQuickChat({
-    createWindow: () => createWindow(true),
+    createWindow: () => createWindow("quick"),
     showMain,
     dataDirectory,
     onDismiss: () =>
       Promise.all(
         [...windows]
-          .filter((win) => win !== mainWindow)
+          .filter((win) => windowModes.get(win) === "quick")
           .map((win) => speech.cancelOwner(win.webContents)),
       ),
     onStatus: (status) => broadcast("vesper:quick:status", status),

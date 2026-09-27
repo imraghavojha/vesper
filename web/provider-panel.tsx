@@ -222,6 +222,11 @@ export function ProviderPanel({
               </span>
             ) : null}
           </p>
+        ) : selection ? (
+          <p className="provider-panel__line provider-panel__muted">
+            A saved account is pinned to this chat. Refresh connection to
+            confirm which account it is.
+          </p>
         ) : null}
         {availability?.reason ? (
           <p className="provider-panel__line provider-panel__muted">
@@ -229,26 +234,6 @@ export function ProviderPanel({
           </p>
         ) : null}
       </div>
-
-      <ul
-        className="provider-panel__capabilities"
-        aria-label="Claude capabilities"
-      >
-        <li>
-          Chat:{" "}
-          {availability
-            ? availability.capabilities.chat
-              ? "supported"
-              : "not supported"
-            : "not checked"}
-        </li>
-        <li>Tools, browser, and actions: not available</li>
-        <li>Native session resume: not available</li>
-        <li>
-          Replies continue from up to 20 recent visible messages, within a
-          60,000-character history limit.
-        </li>
-      </ul>
 
       <div className="provider-panel__group">
         <label className="provider-panel__label" htmlFor={modelSelectId}>
@@ -338,16 +323,38 @@ export function ProviderPanel({
         </p>
       ) : null}
 
-      <ul className="provider-panel__others" aria-label="Other providers">
-        {UNAVAILABLE_PROVIDERS.map((name) => (
-          <li key={name}>
-            {name}{" "}
-            <span className="provider-panel__muted">
-              not available in this build
-            </span>
+      <details className="provider-panel__details">
+        <summary>What this connection can do</summary>
+        <ul
+          className="provider-panel__capabilities"
+          aria-label="Claude capabilities"
+        >
+          <li>
+            Chat:{" "}
+            {availability
+              ? availability.capabilities.chat
+                ? "supported"
+                : "not supported"
+              : "not checked"}
           </li>
-        ))}
-      </ul>
+          <li>Tools, browser, and actions: not available</li>
+          <li>Native session resume: not available</li>
+          <li>
+            Replies continue from up to 20 recent visible messages, within a
+            60,000-character history limit.
+          </li>
+        </ul>
+        <ul className="provider-panel__others" aria-label="Other providers">
+          {UNAVAILABLE_PROVIDERS.map((name) => (
+            <li key={name}>
+              {name}{" "}
+              <span className="provider-panel__muted">
+                not available in this build
+              </span>
+            </li>
+          ))}
+        </ul>
+      </details>
     </section>
   );
 }

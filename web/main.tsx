@@ -22,12 +22,22 @@ import type {
   SpeechEvent,
 } from "../shared/desktop.js";
 import { ConversationScreen } from "./chat.js";
+import { VesperAvatar } from "./presentation/icons.js";
 
 const STORAGE_KEY = "vesper.connection.v1";
 type SavedConnection = Connection & {
   workspaceId: string;
   mode?: "local" | "remote";
 };
+/** Sections the native settings window may be opened at. */
+export type SettingsEntrySection =
+  | "general"
+  | "providers"
+  | "devices"
+  | "dictation";
+const settingsWindow =
+  !!window.vesperDesktop &&
+  new URLSearchParams(location.search).get("settings") === "1";
 class LocalWorkspaceRestoreError extends Error {}
 type LocalHostStatus = {
   state: "stopped" | "starting" | "running" | "failed";
@@ -73,6 +83,12 @@ declare global {
           workspaceId: string;
           conversationId: string;
         }) => void,
+      ): () => void;
+      showSettings(section?: SettingsEntrySection): Promise<void>;
+      closeSettings(): Promise<void>;
+      settingsSection(): Promise<SettingsEntrySection>;
+      onSettingsSection(
+        callback: (section: SettingsEntrySection) => void,
       ): () => void;
       speechCommand(command: SpeechCommand): Promise<void>;
       cancelSpeech(): Promise<void>;
@@ -162,9 +178,7 @@ const queries = new QueryClient({
 function Brand() {
   return (
     <div className="brand">
-      <span className="mark" aria-hidden="true">
-        v
-      </span>
+      <VesperAvatar size={30} />
       <span>vesper</span>
     </div>
   );
@@ -266,9 +280,18 @@ function App() {
         <main className="workspace">
           <p role="status">Opening your saved connection…</p>
         </main>
+      ) : settingsWindow && !connection ? (
+        // The settings window never pairs or creates workspaces itself.
+        <main className="workspace">
+          <p role="status">
+            Connect a workspace in the main Vesper window, then reopen
+            Settings.
+          </p>
+        </main>
       ) : connection && view === "chat" ? (
         <ConversationScreen
           key={connection.workspaceId}
+          settingsWindow={settingsWindow}
           connection={connection}
           onWorkspace={() => setView("workspace")}
           onRevoked={forgetRevoked}

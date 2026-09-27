@@ -18,18 +18,18 @@ export function QuickControls() {
   }, [bridge]);
   if (!bridge) return null;
   return (
-    <section className="quick-controls">
-      <h3>Quick chat</h3>
-      <button
-        onClick={() =>
-          void bridge
-            .showQuickChat()
-            .catch(() => setError("Quick chat could not open."))
-        }
-      >
-        Open quick chat
-      </button>
+    <div className="quick-controls">
+      <p className="quick-controls__status" role="status">
+        {status?.active ? (
+          <>
+            Shortcut <kbd>{status.active}</kbd>
+          </>
+        ) : (
+          "No global shortcut active. Use the menu-bar action."
+        )}
+      </p>
       <form
+        className="quick-controls__form"
         onSubmit={(event) => {
           event.preventDefault();
           setError("");
@@ -40,20 +40,34 @@ export function QuickControls() {
         }}
       >
         <label htmlFor="quick-shortcut">Global shortcut</label>
-        <input
-          id="quick-shortcut"
-          value={requested}
-          maxLength={80}
-          onChange={(event) => setRequested(event.target.value)}
-        />
-        <button>Set shortcut</button>
+        <div className="quick-controls__row">
+          <input
+            id="quick-shortcut"
+            value={requested}
+            maxLength={80}
+            spellCheck={false}
+            onChange={(event) => setRequested(event.target.value)}
+          />
+          <button className="pill-button" aria-label="Set global shortcut">
+            Set
+          </button>
+        </div>
       </form>
-      <p role="status">
-        {status?.active
-          ? `Active: ${status.active}`
-          : "No global shortcut active. Use the menu-bar action."}
-      </p>
-      {(error || status?.error) && <p role="alert">{error || status?.error}</p>}
-    </section>
+      <button
+        className="pill-button"
+        onClick={() =>
+          void bridge
+            .showQuickChat()
+            .catch(() => setError("Quick chat could not open."))
+        }
+      >
+        Open quick chat
+      </button>
+      {(error || status?.error) && (
+        <p className="panel-error" role="alert">
+          {error || status?.error}
+        </p>
+      )}
+    </div>
   );
 }
